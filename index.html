@@ -195,6 +195,11 @@
             text-transform: uppercase; color: rgba(255,255,255,0.3);
         }
 
+        .met-counter {
+            font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+            color: rgba(255,255,255,0.25); letter-spacing: 1.5px; margin-top: 4px;
+        }
+
         /* Connection line indicator */
         .dist-line-label {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -219,6 +224,7 @@
                 <div class="status-dot"></div>
                 <span id="phase-text">In Transit to Moon</span>
             </div>
+            <div class="met-counter" id="met-counter">T+00:00:00:00</div>
         </div>
     </div>
 
@@ -1346,6 +1352,15 @@
             else if (hudDay < 9.5) phase = 'Return Transit';
             else if (hudDay < 10) phase = 'Re-entry';
             document.getElementById('phase-text').textContent = phase;
+
+            // MET counter
+            const metMs = Math.max(0, hudElapsedMs);
+            const metD = Math.floor(metMs / 86400000);
+            const metH = Math.floor((metMs % 86400000) / 3600000);
+            const metM = Math.floor((metMs % 3600000) / 60000);
+            const metS = Math.floor((metMs % 60000) / 1000);
+            document.getElementById('met-counter').textContent =
+                `T+${String(metD).padStart(2,'0')}:${String(metH).padStart(2,'0')}:${String(metM).padStart(2,'0')}:${String(metS).padStart(2,'0')}`;
 
             // Distances
             const dEarth = Math.max(0, orionKm.length() - EARTH_RADIUS_KM);
