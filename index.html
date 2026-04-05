@@ -72,7 +72,7 @@
 
         #timeline {
             position: fixed; bottom: 28px; right: 32px; z-index: 10;
-            pointer-events: none; width: 340px;
+            pointer-events: auto; width: 340px;
         }
         .timeline-bar {
             background: rgba(10,12,20,0.7); border: 1px solid rgba(255,255,255,0.07);
@@ -90,17 +90,33 @@
             font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: #6ec6ff;
         }
         .progress-track {
-            width: 100%; height: 3px; background: rgba(255,255,255,0.08);
-            border-radius: 2px; position: relative; margin-bottom: 12px;
+            width: 100%; position: relative; margin-bottom: 12px;
+            height: 16px; display: flex; align-items: center;
         }
-        .progress-fill {
-            height: 100%; background: linear-gradient(90deg, #ff6b35, #6ec6ff);
-            border-radius: 2px; transition: width 1s linear;
+        .timeline-slider {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 3px; border-radius: 2px; outline: none;
+            cursor: pointer; pointer-events: auto;
+            background: rgba(255,255,255,0.08);
         }
-        .progress-marker {
-            position: absolute; top: -4px; width: 11px; height: 11px;
-            background: #fff; border-radius: 50%; transform: translateX(-50%);
-            box-shadow: 0 0 12px rgba(255,255,255,0.7); transition: left 1s linear;
+        .timeline-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 13px; height: 13px; border-radius: 50%;
+            background: #fff; cursor: pointer; border: none;
+            box-shadow: 0 0 12px rgba(255,255,255,0.7);
+            margin-top: -5px;
+        }
+        .timeline-slider::-moz-range-thumb {
+            width: 13px; height: 13px; border-radius: 50%;
+            background: #fff; cursor: pointer; border: none;
+            box-shadow: 0 0 12px rgba(255,255,255,0.7);
+        }
+        .timeline-slider::-webkit-slider-runnable-track {
+            height: 3px; border-radius: 2px;
+        }
+        .timeline-slider::-moz-range-track {
+            height: 3px; border-radius: 2px;
+            background: rgba(255,255,255,0.08);
         }
         .phase-labels { display: flex; justify-content: space-between; }
         .phase-label {
@@ -235,8 +251,9 @@
                 <div class="timeline-met" id="met-display">—</div>
             </div>
             <div class="progress-track">
-                <div class="progress-fill" id="progress-fill"></div>
-                <div class="progress-marker" id="progress-marker"></div>
+                <input type="range" class="timeline-slider" id="timeline-slider"
+                       min="0" max="10000" value="0"
+                       oninput="onTimelineScrub(this.value)">
             </div>
             <div class="phase-labels">
                 <span class="phase-label" id="pl-launch">Launch</span>
@@ -1078,8 +1095,14 @@
 
         window.setSpeed = (spd) => {
             simStartReal = Date.now();
-            const elapsed = simStartReal - LAUNCH_TIME;
-            simStartDay = Math.max(0, Math.min(elapsed / MISSION_DURATION_MS, 1.0)) * MISSION_DAYS;
+            // Start simulation from scrub position if user was scrubbing, else from real time
+            if (scrubDay !== null) {
+                simStartDay = scrubDay;
+                scrubDay = null;
+            } else {
+                const elapsed = simStartReal - LAUNCH_TIME;
+                simStartDay = Math.max(0, Math.min(elapsed / MISSION_DURATION_MS, 1.0)) * MISSION_DAYS;
+            }
             speedMult = spd;
             document.getElementById('sim-dropdown').classList.remove('open');
             document.getElementById('btn-sim').classList.add('sim-active');
@@ -1113,11 +1136,41 @@
             speedMult = 1;
             simStartReal = null;
             simStartDay = null;
+            scrubDay = null;
             document.getElementById('btn-sim').classList.remove('sim-active');
             document.getElementById('btn-sim').textContent = 'Simulate Travel';
             document.getElementById('btn-reset').style.display = 'none';
             document.getElementById('sim-slider-wrap').classList.remove('visible');
         };
+
+        // Timeline scrub — user drags the mission timeline slider
+        let scrubDay = null;
+        let scrubbing = false;
+
+        window.onTimelineScrub = (val) => {
+            // Slider 0-10000 maps to TLI_DAY → MISSION_DAYS
+            scrubDay = TLI_DAY + (val / 10000) * (MISSION_DAYS - TLI_DAY);
+            scrubbing = true;
+            // Pause any running simulation
+            if (speedMult > 1) {
+                simStartReal = null;
+                simStartDay = null;
+                speedMult = 1;
+                document.getElementById('btn-sim').classList.remove('sim-active');
+                document.getElementById('btn-sim').textContent = 'Simulate Travel';
+                document.getElementById('btn-reset').style.display = 'none';
+                document.getElementById('sim-slider-wrap').classList.remove('visible');
+            }
+        };
+
+        // Detect when user finishes scrubbing
+        document.addEventListener('DOMContentLoaded', () => {
+            const slider = document.getElementById('timeline-slider');
+            if (slider) {
+                slider.addEventListener('pointerup', () => { scrubbing = false; });
+                slider.addEventListener('touchend', () => { scrubbing = false; });
+            }
+        });
 
         // Cancel camera animation as soon as user interacts
         ['pointerdown', 'wheel', 'touchstart'].forEach(evt => {
@@ -1152,9 +1205,12 @@
             const realT = Math.max(0, Math.min(realElapsed / MISSION_DURATION_MS, 1.0));
             const realDay = realT * MISSION_DAYS;
 
-            // Simulated time for 3D scene — accelerate FROM the point where sim was activated
+            // Simulated time for 3D scene
             let simDay;
-            if (simStartReal !== null && speedMult > 1) {
+            if (scrubDay !== null) {
+                // User is scrubbing the timeline
+                simDay = scrubDay;
+            } else if (simStartReal !== null && speedMult > 1) {
                 const dtMs = now - simStartReal;
                 simDay = simStartDay + (dtMs * speedMult) / MISSION_DURATION_MS * MISSION_DAYS;
                 simDay = Math.max(0, Math.min(simDay, MISSION_DAYS));
@@ -1185,9 +1241,11 @@
             engineGlow.intensity = 2 + Math.sin(now * 0.004) * 1;
 
             // ── Traveled trajectory ──
-            // trajPts starts from TLI_DAY, so map simDay into that range
-            const trajFrac = Math.max(0, (simDay - TLI_DAY) / (MISSION_DAYS - TLI_DAY));
-            const traveledIdx = Math.max(2, Math.floor(trajFrac * trajPts.length));
+            // trajPts maps data indices TLI_INDEX..TRAJ_N-1, 10 subdivisions each
+            // Convert simDay to matching data index
+            const dataIdx = (simDay - TRAJ_START_DAY) / TRAJ_STEP_DAYS;
+            const trajIdx = Math.max(0, (dataIdx - TLI_INDEX) * 10);
+            const traveledIdx = Math.min(trajPts.length, Math.max(2, Math.ceil(trajIdx)));
             const traveled = trajPts.slice(0, traveledIdx);
             traveledLine.geometry.dispose();
             traveledLine.geometry = new THREE.BufferGeometry().setFromPoints(traveled);
@@ -1247,9 +1305,9 @@
             moonLabel.lookAt(camera.position);
             orionLabel.lookAt(camera.position);
 
-            // ═══ HUD UPDATE — uses simDay during simulation ═══
-            const hudDay = speedMult > 1 ? simDay : realDay;
-            const hudT = speedMult > 1 ? simT : realT;
+            // ═══ HUD UPDATE — uses simDay during simulation/scrub ═══
+            const hudDay = (scrubDay !== null || speedMult > 1) ? simDay : realDay;
+            const hudT = hudDay / MISSION_DAYS;
             const hudElapsedMs = hudDay * 86400000;
 
             // Human-readable date/time in user's timezone
@@ -1262,10 +1320,15 @@
             });
             document.getElementById('met-display').textContent = `${dateStr}, ${timeStr}`;
 
-            // Progress bar — moves during simulation
-            const pct = Math.min(hudT * 100, 100);
-            document.getElementById('progress-fill').style.width = pct + '%';
-            document.getElementById('progress-marker').style.left = pct + '%';
+            // Update timeline slider (only when not being dragged)
+            if (!scrubbing) {
+                const sliderVal = Math.max(0, (hudDay - TLI_DAY) / (MISSION_DAYS - TLI_DAY)) * 10000;
+                document.getElementById('timeline-slider').value = Math.round(Math.min(10000, sliderVal));
+            }
+            // Update slider gradient fill
+            const pct = Math.max(0, Math.min(100, (hudDay - TLI_DAY) / (MISSION_DAYS - TLI_DAY) * 100));
+            document.getElementById('timeline-slider').style.background =
+                `linear-gradient(90deg, #ff6b35 0%, #6ec6ff ${pct}%, rgba(255,255,255,0.08) ${pct}%)`;
 
             // Phase labels
             [['pl-launch',0,0.106],['pl-tli',0.106,0.15],['pl-transit',0.15,0.53],
