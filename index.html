@@ -1371,8 +1371,8 @@
 
         function getTrajectoryPos(day) {
             const historicBounds = getHistoricTrajectoryBounds();
+            const liveBounds = getLiveTrajectoryBounds();
             if (liveTrajectorySamples.length >= 2) {
-                const liveBounds = getLiveTrajectoryBounds();
                 if (liveBounds && day >= liveBounds.startDay && day <= liveBounds.endDay) {
                     return interpolateTrajectorySamples(liveTrajectorySamples, day);
                 }
@@ -1384,11 +1384,16 @@
                 if (historicBounds && day >= 0 && day < historicBounds.startDay) {
                     return getLaunchBridgePos(day);
                 }
+                if (historicBounds && day > historicBounds.endDay) {
+                    return historicTrajectorySamples[historicTrajectorySamples.length - 1].position.clone();
+                }
             }
             if (liveTrajectorySamples.length >= 2) {
-                const liveBounds = getLiveTrajectoryBounds();
                 if (liveBounds && day >= 0 && day < liveBounds.startDay) {
                     return getLaunchBridgePos(day);
+                }
+                if (liveBounds && day > liveBounds.endDay) {
+                    return liveTrajectorySamples[liveTrajectorySamples.length - 1].position.clone();
                 }
             }
             return getFallbackTrajectoryPos(day);
@@ -2778,13 +2783,17 @@
             );
         }
 
+        function getMoonOffsetForOrionDay(day) {
+            const moonKm = getMoonPos(day);
+            return new THREE.Vector3(moonKm.x * SCALE, moonKm.y * SCALE, moonKm.z * SCALE);
+        }
+
         function getMoonOffsetForDateMs(dateMs) {
             const nasaMoonStartMs = ORION_REFERENCE_LAUNCH_TIME + TRAJ_START_DAY * MS_PER_DAY;
             const nasaMoonEndMs = nasaMoonStartMs + (NASA_MOON.length - 1) * TRAJ_STEP_DAYS * MS_PER_DAY;
             if (dateMs >= nasaMoonStartMs && dateMs <= nasaMoonEndMs) {
                 const nasaDay = (dateMs - ORION_REFERENCE_LAUNCH_TIME) / MS_PER_DAY;
-                const moonKm = getMoonPos(nasaDay);
-                return new THREE.Vector3(moonKm.x * SCALE, moonKm.y * SCALE, moonKm.z * SCALE);
+                return getMoonOffsetForOrionDay(nasaDay);
             }
             return getSyntheticMoonOffset(dateMs);
         }
@@ -2795,22 +2804,21 @@
             return dateMs >= nasaMoonStartMs && dateMs <= nasaMoonEndMs;
         }
 
-        function buildMoonOrbitPointsAroundDate(dateMs, durationDays, segments) {
-            if (!usesEmbeddedNasaMoonData(dateMs)) {
-                const pts = [];
-                const orbitDurationMs = durationDays * MS_PER_DAY;
-                for (let i = 0; i < segments; i += 1) {
-                    const sampleDateMs = dateMs + (i / segments) * orbitDurationMs;
-                    pts.push(getSyntheticMoonOffset(sampleDateMs));
-                }
-                return pts;
-            }
-
-            const current = getMoonOffsetForDateMs(dateMs);
-            const previous = getMoonOffsetForDateMs(dateMs - 0.35 * MS_PER_DAY);
-            const next = getMoonOffsetForDateMs(dateMs + 0.35 * MS_PER_DAY);
+        function buildMoonOrbitPointsFromSample(current, previous, next, segments) {
             const radial = current.clone().normalize();
-            const tangent = next.clone().sub(previous).normalize();
+            let tangent = next.clone().sub(previous);
+            if (tangent.lengthSq() < 1e-8) {
+                tangent = next.clone().sub(current);
+            }
+            if (tangent.lengthSq() < 1e-8) {
+                tangent = current.clone().sub(previous);
+            }
+            if (tangent.lengthSq() < 1e-8) {
+                tangent = radial.clone().cross(new THREE.Vector3(0, 1, 0));
+                if (tangent.lengthSq() < 1e-8) tangent = radial.clone().cross(new THREE.Vector3(1, 0, 0));
+            }
+            tangent.normalize();
+
             let normal = radial.clone().cross(tangent);
             if (normal.lengthSq() < 1e-8) {
                 normal = radial.clone().cross(new THREE.Vector3(0, 1, 0));
@@ -2828,6 +2836,34 @@
                 );
             }
             return pts;
+        }
+
+        function buildMoonOrbitPointsAroundDate(dateMs, durationDays, segments) {
+            if (!usesEmbeddedNasaMoonData(dateMs)) {
+                const pts = [];
+                const orbitDurationMs = durationDays * MS_PER_DAY;
+                for (let i = 0; i < segments; i += 1) {
+                    const sampleDateMs = dateMs + (i / segments) * orbitDurationMs;
+                    pts.push(getSyntheticMoonOffset(sampleDateMs));
+                }
+                return pts;
+            }
+
+            return buildMoonOrbitPointsFromSample(
+                getMoonOffsetForDateMs(dateMs),
+                getMoonOffsetForDateMs(dateMs - 0.35 * MS_PER_DAY),
+                getMoonOffsetForDateMs(dateMs + 0.35 * MS_PER_DAY),
+                segments
+            );
+        }
+
+        function buildMoonOrbitPointsAroundOrionDay(day, segments) {
+            return buildMoonOrbitPointsFromSample(
+                getMoonOffsetForOrionDay(day),
+                getMoonOffsetForOrionDay(Math.max(0, day - 0.35)),
+                getMoonOffsetForOrionDay(Math.min(MISSION_DAYS, day + 0.35)),
+                segments
+            );
         }
 
         function getEventWaypointWorldPos(waypoint) {
@@ -4475,24 +4511,27 @@
             const earthWorld = getPlanetWorldPos(solarPlanets.Earth.data, sceneSolarDateMs);
             earthGroup.position.copy(earthWorld);
             const moonOffset = currentEventKind === 'orion'
-                ? (() => {
-                    const moonKm = getMoonPos(simDay);
-                    return new THREE.Vector3(moonKm.x * SCALE, moonKm.y * SCALE, moonKm.z * SCALE);
-                })()
+                ? getMoonOffsetForOrionDay(simDay)
                 : getMoonOffsetForDateMs(sceneSolarDateMs);
             moonOrbitVisualGroup.position.copy(earthWorld);
             moonGroup.position.copy(earthWorld.clone().add(moonOffset));
-            if (lastMoonOrbitRefreshMs === null || Math.abs(sceneSolarDateMs - lastMoonOrbitRefreshMs) >= 0.25 * MS_PER_DAY) {
-                const fullOrbitPts = buildMoonOrbitPointsAroundDate(sceneSolarDateMs, 27.321661, 240);
+            const moonOrbitRefreshKey = currentEventKind === 'orion' ? simDay : sceneSolarDateMs;
+            const moonOrbitRefreshThreshold = currentEventKind === 'orion' ? 0.02 : 0.25 * MS_PER_DAY;
+            if (lastMoonOrbitRefreshMs === null || Math.abs(moonOrbitRefreshKey - lastMoonOrbitRefreshMs) >= moonOrbitRefreshThreshold) {
+                const fullOrbitPts = currentEventKind === 'orion'
+                    ? buildMoonOrbitPointsAroundOrionDay(simDay, 240)
+                    : buildMoonOrbitPointsAroundDate(sceneSolarDateMs, 27.321661, 240);
                 moonOrbitReferenceLine.geometry.dispose();
                 moonOrbitReferenceLine.geometry = new THREE.BufferGeometry().setFromPoints(fullOrbitPts);
                 moonOrbitReferenceGlow.geometry.dispose();
                 moonOrbitReferenceGlow.geometry = new THREE.BufferGeometry().setFromPoints(fullOrbitPts);
 
-                const currentArcPts = buildMoonOrbitPointsAroundDate(sceneSolarDateMs, 27.321661, 180);
+                const currentArcPts = currentEventKind === 'orion'
+                    ? buildMoonOrbitPointsAroundOrionDay(simDay, 180)
+                    : buildMoonOrbitPointsAroundDate(sceneSolarDateMs, 27.321661, 180);
                 moonOrbitCurrentArc.geometry.dispose();
                 moonOrbitCurrentArc.geometry = new THREE.BufferGeometry().setFromPoints(currentArcPts);
-                lastMoonOrbitRefreshMs = sceneSolarDateMs;
+                lastMoonOrbitRefreshMs = moonOrbitRefreshKey;
             }
 
             // ── Update Orion ──
@@ -4524,8 +4563,14 @@
                     ? Math.max(420, Math.min(4200, camera.position.distanceTo(controls.target) / 70))
                     : 1;
             const sphereVisibilityScale = activeView === 'earth-moon' ? (1.25 / 6) : 1.25;
+            const orionEarthAltitudeKm = Math.max(0, orionWorld.distanceTo(earthWorld) / SCALE - EARTH_RADIUS_KM);
+            const isLateEarthApproach = currentEventKind === 'orion' && simDay >= MISSION_DAYS * 0.9 && orionEarthAltitudeKm <= 80000;
+            const orionSphereScaleFactor =
+                currentEventKind === 'orion' && (cameraMode === 'follow-orion' || isLateEarthApproach)
+                    ? 0.25
+                    : 1;
             orionGroup.scale.setScalar(solarCraftScaleBoost);
-            sphereCraftGroup.scale.setScalar(solarCraftScaleBoost * sphereVisibilityScale);
+            sphereCraftGroup.scale.setScalar(solarCraftScaleBoost * sphereVisibilityScale * orionSphereScaleFactor);
             const eventGroupScale = solarCraftScaleBoost * eventModelVisibilityScale;
             eventModelGroup.scale.setScalar(eventGroupScale);
             // Keep the beacon sprite at a constant 1.5 world-units regardless of group scale
@@ -4869,22 +4914,23 @@
             const earthWorld = getPlanetWorldPos(solarPlanets.Earth.data, initialMissionDateMs);
             earthGroup.position.copy(earthWorld);
             const moonOffset = currentEventKind === 'orion'
-                ? (() => {
-                    const moonKm = getMoonPos(day);
-                    return new THREE.Vector3(moonKm.x * SCALE, moonKm.y * SCALE, moonKm.z * SCALE);
-                })()
+                ? getMoonOffsetForOrionDay(day)
                 : getMoonOffsetForDateMs(initialMissionDateMs);
             moonOrbitVisualGroup.position.copy(earthWorld);
             moonGroup.position.copy(earthWorld.clone().add(moonOffset));
-            const initialMoonOrbitPts = buildMoonOrbitPointsAroundDate(initialMissionDateMs, 27.321661, 240);
+            const initialMoonOrbitPts = currentEventKind === 'orion'
+                ? buildMoonOrbitPointsAroundOrionDay(day, 240)
+                : buildMoonOrbitPointsAroundDate(initialMissionDateMs, 27.321661, 240);
             moonOrbitReferenceLine.geometry.dispose();
             moonOrbitReferenceLine.geometry = new THREE.BufferGeometry().setFromPoints(initialMoonOrbitPts);
             moonOrbitReferenceGlow.geometry.dispose();
             moonOrbitReferenceGlow.geometry = new THREE.BufferGeometry().setFromPoints(initialMoonOrbitPts);
-            const initialMoonArcPts = buildMoonOrbitPointsAroundDate(initialMissionDateMs, 27.321661, 180);
+            const initialMoonArcPts = currentEventKind === 'orion'
+                ? buildMoonOrbitPointsAroundOrionDay(day, 180)
+                : buildMoonOrbitPointsAroundDate(initialMissionDateMs, 27.321661, 180);
             moonOrbitCurrentArc.geometry.dispose();
             moonOrbitCurrentArc.geometry = new THREE.BufferGeometry().setFromPoints(initialMoonArcPts);
-            lastMoonOrbitRefreshMs = initialMissionDateMs;
+            lastMoonOrbitRefreshMs = currentEventKind === 'orion' ? day : initialMissionDateMs;
             const orionKm = getTrajectoryPos(day);
             const orionOffset = new THREE.Vector3(orionKm.x * SCALE, orionKm.y * SCALE, orionKm.z * SCALE);
             const orionWorld = earthWorld.clone().add(orionOffset);
