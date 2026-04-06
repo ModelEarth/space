@@ -2075,10 +2075,12 @@
                 new THREE.LineBasicMaterial({
                     color: planet.orbitColor,
                     transparent: true,
-                    opacity: planet.name === 'Earth' ? 0.32 : 0.18
+                    opacity: planet.name === 'Earth' ? 0.32 : 0.18,
+                    depthWrite: false
                 })
             );
             orbitLine.frustumCulled = false;
+            orbitLine.renderOrder = 1;
             solarSystemGroup.add(orbitLine);
 
             const orbitTube = new THREE.Mesh(
@@ -2092,6 +2094,7 @@
                 })
             );
             orbitTube.frustumCulled = false;
+            orbitTube.renderOrder = 0;
             solarSystemGroup.add(orbitTube);
 
             const planetGroup = new THREE.Group();
@@ -2106,6 +2109,7 @@
                     opacity: 0.96
                 })
             );
+            body.renderOrder = 10;
             planetVisual.add(body);
 
             const marker = new THREE.Mesh(
@@ -2118,6 +2122,7 @@
                 })
             );
             marker.visible = false;
+            marker.renderOrder = 11;
             planetVisual.add(marker);
 
             const glow = new THREE.Mesh(
@@ -2129,6 +2134,7 @@
                     blending: THREE.AdditiveBlending
                 })
             );
+            glow.renderOrder = 9;
             planetVisual.add(glow);
 
             let sprite = null;
@@ -2154,6 +2160,7 @@
                 }));
                 const spriteSize = Math.max(bodyRadius * 4.6, 4.5);
                 sprite.scale.set(spriteSize, spriteSize, 1);
+                sprite.renderOrder = 8;
                 planetVisual.add(sprite);
             })();
 
@@ -2169,6 +2176,7 @@
                 );
                 rings.rotation.x = Math.PI / 2;
                 rings.rotation.z = 0.55;
+                rings.renderOrder = 10;
                 planetVisual.add(rings);
             }
 
@@ -2176,6 +2184,7 @@
             const baseLabelY = bodyRadius + 2.2;
             label.position.set(0, baseLabelY, 0);
             label.scale.set(5.2, 0.65, 1);
+            label.renderOrder = 20;
             planetGroup.add(label);
 
             solarSystemGroup.add(planetGroup);
@@ -2785,8 +2794,10 @@
                 );
                 return;
             }
-            if ((activeView === 'earth-moon' || activeView === 'solar-system') && getCurrentSceneDay() >= MISSION_DAYS - 0.001) {
-                restartArtemisMission();
+            if (activeView === 'earth-moon' || activeView === 'solar-system') {
+                if (getCurrentSceneDay() >= MISSION_DAYS - 0.001) {
+                    restartArtemisMission();
+                }
             }
             if (speedMult < 30000) {
                 setSpeed(30000);
@@ -3148,7 +3159,7 @@
                     activeView === 'earth-moon' &&
                     camera.position.distanceTo(controls.target) > 120;
                 const earthMoonOrbitLineMode = activeView === 'earth-moon';
-                const showStandaloneEarth = !(name === 'Earth' && cameraMode === 'follow-orion');
+                const showStandaloneEarth = true;
                 const basePlanetVisualBoost = activeView === 'solar-system'
                     ? (name === 'Earth' || name === 'Mars' ? 40 : 28)
                     : activeView === 'mars-2033'
@@ -3174,12 +3185,15 @@
                 planet.visual.visible = showStandaloneEarth;
                 planet.label.visible = showStandaloneEarth;
                 planet.label.position.y = planet.baseLabelY + (planetVisualBoost - 1) * planet.bodyRadius * 1.35;
+                const labelScaleBoost = activeView === 'solar-system' ? 1.25 : activeView === 'mars-2033' ? 1.12 : earthMoonWideOrbitMode ? 1.45 : 1.08;
+                planet.label.scale.set(5.2 * labelScaleBoost, 0.65 * labelScaleBoost, 1);
+                planet.label.material.opacity = activeView === 'earth-moon' ? 0.9 : 0.82;
                 planet.body.material.opacity = heliocentricOrbitMode ? 1 : 0.96;
-                planet.marker.visible = showStandaloneEarth && (heliocentricOrbitMode || earthMoonWideOrbitMode) && !(name === 'Earth' && !heliocentricOrbitMode);
-                planet.marker.material.opacity = activeView === 'solar-system' ? 0.96 : activeView === 'mars-2033' ? 0.92 : earthMoonWideOrbitMode ? 0.95 : 0.8;
-                planet.glow.material.opacity = activeView === 'mars-2033' ? 0.34 : activeView === 'solar-system' ? 0.48 : earthMoonWideOrbitMode ? 0.4 : 0.18;
+                planet.marker.visible = showStandaloneEarth && heliocentricOrbitMode;
+                planet.marker.material.opacity = activeView === 'solar-system' ? 0.08 : activeView === 'mars-2033' ? 0.06 : 0.008;
+                planet.glow.material.opacity = activeView === 'mars-2033' ? 0.02 : activeView === 'solar-system' ? 0.025 : earthMoonWideOrbitMode ? 0.003 : 0.006;
                 if (planet.sprite) {
-                    planet.sprite.material.opacity = activeView === 'mars-2033' ? 0.7 : activeView === 'solar-system' ? 0.92 : earthMoonWideOrbitMode ? 0.88 : 0.42;
+                    planet.sprite.material.opacity = activeView === 'mars-2033' ? 0.02 : activeView === 'solar-system' ? 0.025 : earthMoonWideOrbitMode ? 0.004 : 0.008;
                 }
                 planet.orbitTube.material.opacity = heliocentricOrbitMode
                     ? (name === 'Earth' ? 0.26 : 0.18)
