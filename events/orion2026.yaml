@@ -1,0 +1,23 @@
+id: orion2026
+label: Orion 2026
+kind: orion
+vehicle: sphere
+follow_label: Follow Orion
+mission_name: ARTEMIS II
+browser_title: Artemis II — Live Mission Tracker
+overview_label: Mission Overview
+overview_view: earth-moon
+launch_time: 2026-04-01T22:35:00Z
+mission_days: 10
+solar_start_date: 2026-04-06T12:00:00Z
+initial_view: earth-moon
+focus_cameras:
+  earth:
+    position_offset: [0, 9.5565, 12.742]
+    target_offset: [0, 0, 0]
+  moon:
+    position_offset: [1.737, 2.6055, 4.3425]
+    target_offset: [0, 0, 0]
+  earth_moon:
+    position_offset: [0, 100, 60]
+    target_offset: [0, 0, 0]
