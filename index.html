@@ -1698,6 +1698,7 @@
         const starBackgroundGroup = new THREE.Group();
         scene.add(starBackgroundGroup);
         let sunSprite = null;
+        let sunCore = null;
 
         // ═══════════════════════════════════════════
         // STARFIELD
@@ -2200,6 +2201,19 @@
         scene.add(sunDir.target);
         scene.add(new THREE.AmbientLight(0x1a1a3a, 0.4));
 
+        sunCore = new THREE.Mesh(
+            new THREE.SphereGeometry(10, 32, 16),
+            new THREE.MeshBasicMaterial({
+                color: 0xffd27a,
+                transparent: true,
+                opacity: 0.98
+            })
+        );
+        sunCore.position.set(0, 0, 0);
+        sunCore.frustumCulled = false;
+        sunCore.renderOrder = 29;
+        solarSystemGroup.add(sunCore);
+
         // Sun glow sprite with procedural circular texture
         (() => {
             const c = document.createElement('canvas');
@@ -2214,11 +2228,18 @@
             ctx.fillRect(0, 0, 128, 128);
             const tex = new THREE.CanvasTexture(c);
             sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-                map: tex, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending
+                map: tex,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                depthTest: false
             }));
-            sunSprite.position.copy(EXISTING_SUN_SPRITE_POS);
+            sunSprite.position.set(0, 0, 0);
             sunSprite.scale.set(40, 40, 1);
-            scene.add(sunSprite);
+            sunSprite.frustumCulled = false;
+            sunSprite.renderOrder = 30;
+            solarSystemGroup.add(sunSprite);
         })();
 
         // ═══════════════════════════════════════════
@@ -4062,8 +4083,8 @@
 
         window.setSpeed = (spd) => {
             if (spd <= 1) {
+                document.getElementById('sim-dropdown').classList.remove('open');
                 resetRealTime();
-                showResetButtonTemporarily();
                 return;
             }
             simStartReal = Date.now();
@@ -4096,7 +4117,11 @@
             pausedSolarDateMs = null;
             speedMult = spd;
             refreshSpeedControls();
-            showResetButtonTemporarily();
+            if (spd > 1) {
+                showResetButtonTemporarily();
+            } else {
+                hideResetButton();
+            }
             updatePlaybackButton();
         };
 
@@ -4182,8 +4207,15 @@
                 slider.addEventListener('touchend', () => { scrubbing = false; });
             }
             if (simSlider) {
-                simSlider.addEventListener('pointerdown', () => { showResetButtonTemporarily(); });
-                simSlider.addEventListener('touchstart', () => { showResetButtonTemporarily(); }, { passive: true });
+                const maybeShowSpeedReset = () => {
+                    if (sliderToSpeed(Number(simSlider.value)) > 1) {
+                        showResetButtonTemporarily();
+                    } else {
+                        hideResetButton();
+                    }
+                };
+                simSlider.addEventListener('pointerdown', maybeShowSpeedReset);
+                simSlider.addEventListener('touchstart', maybeShowSpeedReset, { passive: true });
             }
             if (planetDateInput) {
                 planetDateInput.addEventListener('blur', () => {
@@ -4309,6 +4341,7 @@
                     camera.position.distanceTo(controls.target) > 120;
                 const earthMoonOrbitLineMode = activeView === 'earth-moon';
                 const showStandaloneEarth = true;
+                const suppressPlanetHalo = name === 'Jupiter' || name === 'Saturn';
                 const basePlanetVisualBoost = activeView === 'solar-system'
                     ? (name === 'Earth' || name === 'Mars' ? 40 : 28)
                     : isEventView()
@@ -4338,11 +4371,11 @@
                 planet.label.scale.set(5.2 * labelScaleBoost, 0.65 * labelScaleBoost, 1);
                 planet.label.material.opacity = activeView === 'earth-moon' ? 0.96 : isEventView() ? 0.9 : 0.88;
                 planet.body.material.opacity = heliocentricOrbitMode ? 1 : 0.96;
-                planet.marker.visible = showStandaloneEarth && heliocentricOrbitMode;
-                planet.marker.material.opacity = activeView === 'solar-system' ? 0.08 : isEventView() ? 0.06 : 0.008;
-                planet.glow.material.opacity = isEventView() ? 0.02 : activeView === 'solar-system' ? 0.025 : earthMoonWideOrbitMode ? 0.003 : 0.006;
+                planet.marker.visible = showStandaloneEarth && heliocentricOrbitMode && !suppressPlanetHalo;
+                planet.marker.material.opacity = suppressPlanetHalo ? 0 : activeView === 'solar-system' ? 0.08 : isEventView() ? 0.06 : 0.008;
+                planet.glow.material.opacity = suppressPlanetHalo ? 0 : isEventView() ? 0.02 : activeView === 'solar-system' ? 0.025 : earthMoonWideOrbitMode ? 0.003 : 0.006;
                 if (planet.sprite) {
-                    planet.sprite.material.opacity = isEventView() ? 0.02 : activeView === 'solar-system' ? 0.025 : earthMoonWideOrbitMode ? 0.004 : 0.008;
+                    planet.sprite.material.opacity = suppressPlanetHalo ? 0 : isEventView() ? 0.02 : activeView === 'solar-system' ? 0.025 : earthMoonWideOrbitMode ? 0.004 : 0.008;
                 }
                 planet.orbitTube.material.opacity = heliocentricOrbitMode
                     ? (name === 'Earth' ? 0.26 : 0.18)
@@ -4532,13 +4565,19 @@
 
             // ── Earth rotation (360° in 24h, accelerated with sim) ──
             const earthAngularVel = (2 * Math.PI) / 86400; // rad/s
-            earthMesh.rotation.y += earthAngularVel * dt * (speedMult > 1 ? speedMult : 1);
+            const earthRotationSpeed =
+                (paused || scrubbing)
+                    ? 0
+                    : speedMult > 1
+                    ? speedMult
+                    : 1;
+            earthMesh.rotation.y += earthAngularVel * dt * earthRotationSpeed;
 
             // ── Sun alignment ──
             if (sunSprite) {
-                sunSprite.position.copy(SOLAR_CENTER);
+                sunSprite.position.set(0, 0, 0);
             }
-            sunDir.position.copy(SOLAR_CENTER.clone().add(new THREE.Vector3(300, 80, -150)));
+            sunDir.position.copy(SOLAR_CENTER);
             sunDir.target.position.copy(earthGroup.position);
 
             // ── Camera ──
