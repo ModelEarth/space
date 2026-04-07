@@ -1,0 +1,54 @@
+id: iss
+label: ISS Decommission
+kind: earth-orbit
+vehicle: model
+vehicle_label: ISS
+object_name: iss
+object:
+  name: iss
+  path: spacecraft/iss-centered.babylon
+  scale: 0.0000768
+  rotation_y: 1.5707963267948966
+  render_order: 30
+marker_orb:
+  enabled: true
+  scale: 0.00072
+  opacity: 0.2375
+  depth_write: false
+  side: front
+  render_order: 2
+  label_scale: 1
+  label_offset_y: 0.22
+follow_camera:
+  distance: 0.0004
+  height: 0.00007
+  look_ahead: 0.0012
+  target_height: 0.00002
+  object_scale_multiplier: 1
+follow_speed: 300
+tumble_speed_deg: 0.4
+tumble_axes: [0.42, 0.27, 0.58]
+follow_label: Follow ISS
+mission_name: ISS DECOMMISSION
+browser_title: ISS Decommission
+overview_label: Mission Overview
+overview_view: earth
+start_date: 2026-01-01T00:00:00Z
+end_date: 2030-12-31T23:59:59Z
+solar_start_date: now
+initial_view: earth
+path_color: '#9fe7ff'
+phase_labels: [Stable Orbit, Drag Build, Lowering, Final Orbit, Reentry, South Pacific]
+focus_cameras:
+  earth:
+    position_offset: [0, 8, 22]
+    target_offset: [0, 0, 0]
+initial_camera:
+  relative: true
+  anchor_body: Earth
+  position: [0, 8, 22]
+  target: [0, 0, 0]
+tle_path: paths/iss-current.tle
+earth_orbit:
+  reentry_altitude_km: 20
+  sample_count: 960

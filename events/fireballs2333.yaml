@@ -1,7 +1,8 @@
 id: fireballs2333
 label: Fireballs 2333
 kind: custom
-vehicle: orion
+vehicle: sphere
+vehicle_label: FIREBALLS
 object_name: impact1
 follow_label: Follow Fireballs
 mission_name: FIREBALLS 2333
