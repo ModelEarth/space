@@ -68,7 +68,7 @@
             };
 
             window.__initialEventId = eventId;
-            window.__footerProfileImageSrc = useLorenProfile ? './cadets/loren.png' : './cadets/javi.jpg';
+            window.__footerProfileImageSrc = useLorenProfile ? './cadets/naut.jpg' : './cadets/javi.jpg';
             window.__footerProfileImageAlt = useLorenProfile ? 'Loren' : 'Javi';
             window.__latestInitialEventMeta = null;
             window.__applyInitialEventMetaToDom = () => {
@@ -165,7 +165,8 @@
         #spaceTracker {
             position: relative;
             width: var(--space-tracker-width, 100%);
-            height: var(--space-tracker-height, 100vh);
+            height: var(--space-tracker-height, 100dvh);
+            min-height: var(--space-tracker-height, 100dvh);
             overflow: hidden;
             background: #000;
             color: #fff;
@@ -916,11 +917,12 @@
         }
         @media (max-width: 700px) {
             :root {
-                --mobile-controls-footer-offset: 72px;
+                --mobile-controls-footer-offset: 96px;
             }
             #timeline-footer {
                 display: flex;
                 padding-top: 13px;
+                padding-bottom: calc(18px + env(safe-area-inset-bottom));
             }
             #timeline {
                 left: 12px;
