@@ -40,3 +40,6 @@ tle_path: paths/starlink-1008-current.tle
 earth_orbit:
   reentry_altitude_km: 15
   sample_count: 720
+  visual_sample_count: 96
+  visual_opacity: 0.01
+  glow_opacity: 0.05
