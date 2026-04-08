@@ -10,34 +10,12 @@
     <script>
         (() => {
             const DEFAULT_EVENT_ID = 'orion2026';
-            const EVENT_SPEC_FILES = {
-                orion2026: 'orion2026.yaml',
-                mars2033: 'mars2033.yaml',
-                futurama2100: 'futurama2100.yaml',
-                fireballs2333: 'fireballs2333.yaml',
-                starman2018: 'starman2018.config',
-                iss: 'iss.yaml',
-                starlinkgen1: 'starlink-gen1.yaml'
-            };
-            const EVENT_IDS = new Set(Object.keys(EVENT_SPEC_FILES));
-            const EVENT_LABELS_BOOTSTRAP = {
-                starman2018: 'Starman 2018',
-                starlinkgen1: 'Starlink Satellite',
-                orion2026: 'Orion 2026',
-                iss: 'ISS 2030',
-                mars2033: 'Mars 2033',
-                futurama2100: 'Futurama 2100',
-                fireballs2333: 'Fireballs 2333',
-            };
-            const EVENT_IDS_ORDERED = ['starman2018', 'orion2026', 'iss', 'mars2033', 'futurama2100', 'fireballs2333', 'starlinkgen1'];
             const origin = window.location.origin || '';
             const hostname = window.location.hostname || '';
             const useNautProfile = hostname.includes('dream') || origin.includes('localhost:8887');
             const useModelEarth = hostname.includes('model.earth');
             const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-            const requestedEventId = params.get('event');
-            const eventId = EVENT_IDS.has(requestedEventId) ? requestedEventId : DEFAULT_EVENT_ID;
-            const eventSpecFile = EVENT_SPEC_FILES[eventId] || EVENT_SPEC_FILES[DEFAULT_EVENT_ID];
+            const requestedEventId = params.get('event') || '';
             const parseYamlScalar = (yamlText, key) => {
                 const match = yamlText.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
                 if (!match) return '';
@@ -84,7 +62,8 @@
                 });
             };
 
-            window.__initialEventId = eventId;
+            window.__pageDefaultEventId = DEFAULT_EVENT_ID;
+            window.__initialEventId = requestedEventId || DEFAULT_EVENT_ID;
             window.__footerProfileImageSrc = useModelEarth ? 'https://model.earth/localsite/img/logo/modelearth/model-earth.png' : useNautProfile ? './cadets/naut.jpg' : './cadets/javi.jpg';
             window.__footerProfileImageAlt = useModelEarth ? 'model.earth' : useNautProfile ? 'Naut' : 'Javi';
             window.__latestInitialEventMeta = null;
@@ -113,9 +92,9 @@
                 if (simButton) simButton.textContent = 'Model Speed 1x';
                 if (solarSystemButton) solarSystemButton.style.display = meta.showSolarSystem === false ? 'none' : '';
                 if (eventSelect) {
-                    if (eventSelect.options.length <= 1) {
-                        eventSelect.innerHTML = EVENT_IDS_ORDERED.map((id) =>
-                            `<option value="${id}" data-follow-hash="">${EVENT_LABELS_BOOTSTRAP[id] || id}</option>`
+                    if (eventSelect.options.length <= 1 && window.__eventsConfig) {
+                        eventSelect.innerHTML = window.__eventsConfig.events.map((e) =>
+                            `<option value="${e.id}" data-follow-hash="">${e.label}</option>`
                         ).join('');
                     }
                     eventSelect.value = meta.eventId;
@@ -142,15 +121,43 @@
                 window.__applyInitialEventMetaToDom();
                 scheduleInitialMetaRetry();
             };
-            window.__initialEventSpecTextPromise = fetch(`./events/${eventSpecFile}`, { cache: 'no-cache' })
-                .then((response) => {
-                    if (!response.ok) {
-                        throw new Error(`Unable to load event spec: events/${eventSpecFile}`);
+            window.__eventsConfigPromise = fetch('./events/events.json', { cache: 'no-cache' })
+                .then((r) => {
+                    if (!r.ok) throw new Error('Unable to load events/events.json');
+                    return r.json();
+                })
+                .then((config) => {
+                    window.__eventsConfig = config;
+                    const allIds = new Set(config.events.map((e) => e.id));
+                    if (requestedEventId && !allIds.has(requestedEventId)) {
+                        window.__initialEventId = config.defaultEventId || config.events[0]?.id;
                     }
-                    return response.text();
+                    const jsonDefault = config.defaultEventId || config.events[0]?.id;
+                    if (jsonDefault && jsonDefault !== DEFAULT_EVENT_ID) {
+                        console.log(`%cDefault eventID "${DEFAULT_EVENT_ID}" in page given priority over default "${jsonDefault}" in events.json`, 'color: blue');
+                    }
+                    return config;
+                });
+            // Fetch the initial event yaml asynchronously. When the requested event is the page
+            // default (or absent), start immediately without waiting for events.json.
+            // For any other requested event, chain off events.json to discover its specFile.
+            window.__initialEventSpecTextPromise = (!requestedEventId || requestedEventId === DEFAULT_EVENT_ID)
+                ? fetch(`./events/${DEFAULT_EVENT_ID}.yaml`, { cache: 'no-cache' })
+                    .then((r) => {
+                        if (!r.ok) throw new Error(`Unable to load event spec: events/${DEFAULT_EVENT_ID}.yaml`);
+                        return r.text();
+                    })
+                : window.__eventsConfigPromise.then((config) => {
+                    const entry = config.events.find((e) => e.id === window.__initialEventId) || config.events[0];
+                    return fetch(`./events/${entry.specFile}`, { cache: 'no-cache' })
+                        .then((r) => {
+                            if (!r.ok) throw new Error(`Unable to load event spec: events/${entry.specFile}`);
+                            return r.text();
+                        });
                 });
             window.__initialEventMetaPromise = window.__initialEventSpecTextPromise
                 .then((yamlText) => {
+                    const eventId = window.__initialEventId;
                     const label = parseYamlScalar(yamlText, 'label') || eventId;
                     const missionName = parseYamlScalar(yamlText, 'mission_name');
                     const browserTitle = parseYamlScalar(yamlText, 'browser_title');
@@ -1639,27 +1646,15 @@
         import yaml from 'https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/+esm';
 
         const DEFAULT_BROWSER_TITLE = 'Artemis II — Live Mission Tracker';
-        const DEFAULT_EVENT_ID = 'orion2026';
-        const EVENT_SPEC_FILES = {
-            starman2018: 'starman2018.config',
-            starlinkgen1: 'starlink-gen1.yaml',
-            orion2026: 'orion2026.yaml',
-            iss: 'iss.yaml',
-            mars2033: 'mars2033.yaml',
-            futurama2100: 'futurama2100.yaml',
-            fireballs2333: 'fireballs2333.yaml',
-        };
-        const EVENT_LABELS = {
-            starman2018: 'Starman 2018',
-            starlinkgen1: 'Starlink Satellite',
-            orion2026: 'Orion 2026',
-            iss: 'ISS 2030',
-            mars2033: 'Mars 2033',
-            futurama2100: 'Futurama 2100',
-            fireballs2333: 'Fireballs 2333',
-        };
-        const EVENT_IDS = ['starman2018', 'orion2026', 'iss', 'mars2033', 'futurama2100', 'fireballs2333', 'starlinkgen1'];
+        const { defaultEventId: _defaultEventId, events: _eventsArr } = await (
+            window.__eventsConfigPromise ||
+            fetch('./events/events.json', { cache: 'no-cache' }).then((r) => r.json())
+        );
+        const DEFAULT_EVENT_ID = window.__pageDefaultEventId || _defaultEventId || _eventsArr[0]?.id;
+        const EVENT_IDS = _eventsArr.map((e) => e.id);
         const EVENT_OPTIONS = new Set(EVENT_IDS);
+        const EVENT_LABELS = Object.fromEntries(_eventsArr.map((e) => [e.id, e.label]));
+        const EVENT_SPEC_FILES = Object.fromEntries(_eventsArr.map((e) => [e.id, e.specFile]));
         const EVENT_SPEC_CACHE = new Map();
         const INITIAL_EVENT_ID = EVENT_OPTIONS.has(window.__initialEventId)
             ? window.__initialEventId
