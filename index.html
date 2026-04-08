@@ -192,7 +192,162 @@
             padding: 24px 32px;
             container-type: inline-size;
         }
-        #hud-left { display: flex; flex-direction: column; gap: 4px; }
+        #hud-left {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 4px;
+            pointer-events: auto;
+            cursor: pointer;
+            padding: 8px 12px 8px 14px;
+            background: rgba(10,12,20,0.95);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            transition: all 0.3s;
+            max-width: max-content;
+        }
+        #hud-left:hover,
+        #hud-left:focus-within {
+            background: rgba(255,255,255,0.14);
+            border-color: rgba(255,255,255,0.18);
+        }
+        #hud-left.is-open {
+            display: none;
+        }
+        .mission-name-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 14px;
+            min-width: 0;
+        }
+        .mission-dropdown-arrow {
+            width: 30px;
+            height: 30px;
+            flex: 0 0 auto;
+            color: rgba(255,255,255,0.72);
+            margin-top: 2px;
+        }
+        .mission-dropdown-arrow svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+        #event-picker-wrap {
+            display: block;
+        }
+        #event {
+            display: none;
+            width: 100%;
+        }
+        #mission-menu {
+            display: none;
+            position: absolute;
+            top: 24px;
+            left: 32px;
+            pointer-events: auto;
+            z-index: 113;
+            min-width: 320px;
+        }
+        #mission-menu.open {
+            display: block;
+        }
+        .mission-menu-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.06);
+        }
+        .mission-menu-panel {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            background: rgba(10,12,20,0.9);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 12px 48px rgba(0,0,0,0.45);
+        }
+        .mission-menu-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 2px 2px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            margin-bottom: 2px;
+        }
+        .mission-menu-header-title {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+        }
+        .mission-menu-close {
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.7);
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            cursor: pointer;
+        }
+        .mission-menu-close:hover {
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+        }
+        .mission-menu-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: min(62vh, 540px);
+            overflow: auto;
+            padding-right: 2px;
+        }
+        .mission-menu-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.025);
+            color: rgba(255,255,255,0.75);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+        }
+        .mission-menu-item:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+            color: #fff;
+        }
+        .mission-menu-item.active {
+            background: rgba(110,198,255,0.08);
+            border-color: rgba(110,198,255,0.24);
+            color: #fff;
+        }
+        .mission-menu-item-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.38);
+        }
+        .mission-menu-item-name {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            line-height: 1.1;
+        }
         .mission-title {
             font-size: 11px; font-weight: 600; letter-spacing: 5px;
             text-transform: uppercase; color: rgba(255,255,255,0.4);
@@ -777,9 +932,6 @@
             transition: all 0.3s;
             outline: none;
         }
-        #event {
-            width: 100%;
-        }
         .hint-select:hover,
         .hint-select:focus {
             background: rgba(255,255,255,0.1);
@@ -1147,9 +1299,16 @@
     <div id="canvas-container"></div>
 
     <div id="hud">
-        <div id="hud-left">
+        <div id="hud-left" role="button" tabindex="0" aria-label="Choose mission" onclick="toggleMissionMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMissionMenu();}">
             <div class="mission-title" id="mission-title-text"></div>
-            <div class="mission-name" id="mission-name"></div>
+            <div class="mission-name-row">
+                <div class="mission-name" id="mission-name"></div>
+                <div class="mission-dropdown-arrow" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" focusable="false" aria-hidden="true">
+                        <path d="M4.5 6.25a1 1 0 0 1 1.42.04L8 8.54l2.08-2.25a1 1 0 0 1 1.46 1.36l-2.8 3.02a1 1 0 0 1-1.46 0l-2.8-3.02a1 1 0 0 1 .02-1.42Z"/>
+                    </svg>
+                </div>
+            </div>
             <div class="mission-status">
                 <div class="status-dot"></div>
                 <span id="phase-text"></span>
@@ -1157,6 +1316,17 @@
             <div class="met-counter" id="met-counter"></div>
         </div>
     </div>
+    <div id="mission-menu" aria-hidden="true">
+        <div class="mission-menu-backdrop" onclick="toggleMissionMenu(false)"></div>
+        <div class="mission-menu-panel" role="dialog" aria-label="Choose mission">
+            <div class="mission-menu-header">
+                <div class="mission-menu-header-title">Missions</div>
+                <button class="mission-menu-close" type="button" onclick="toggleMissionMenu(false)">Close</button>
+            </div>
+            <div class="mission-menu-list" id="mission-menu-list"></div>
+        </div>
+    </div>
+    <select class="hint-select" id="event" onchange="onEventChange(this.value)" aria-hidden="true" tabindex="-1"></select>
 
 
     <div id="telemetry">
@@ -1357,9 +1527,6 @@
 
         <div id="controls-hint">
         <div id="controls-hint-body">
-        <div class="hint-select-wrap">
-            <select class="hint-select" id="event" onchange="onEventChange(this.value)"></select>
-        </div>
         <div id="controls-hint-collapsible">
         <button class="hint-btn" id="btn-overview" onclick="focusOverview()">Overview</button>
         <button class="hint-btn" id="btn-follow" onclick="toggleFollow()">Follow</button>
@@ -3184,6 +3351,24 @@
             setHashParam('event', missionId);
         }
 
+        function setMissionMenuOpen(open) {
+            const hudLeft = document.getElementById('hud-left');
+            const missionMenu = document.getElementById('mission-menu');
+            const eventSelect = document.getElementById('event');
+            if (hudLeft) hudLeft.classList.toggle('is-open', open);
+            if (missionMenu) missionMenu.classList.toggle('open', open);
+            if (eventSelect) eventSelect.style.display = 'none';
+            if (hudLeft) hudLeft.setAttribute('aria-hidden', open ? 'true' : 'false');
+            if (missionMenu) missionMenu.setAttribute('aria-hidden', open ? 'false' : 'true');
+        }
+
+        function toggleMissionMenu(forceOpen = null) {
+            const hudLeft = document.getElementById('hud-left');
+            const isOpen = hudLeft?.classList.contains('is-open') || false;
+            setMissionMenuOpen(forceOpen === null ? !isOpen : Boolean(forceOpen));
+        }
+        window.toggleMissionMenu = toggleMissionMenu;
+
         function setFollowHash(follow) {
             updateHashParams((params) => {
                 params.delete('focus');
@@ -3211,18 +3396,63 @@
             document.getElementById('btn-overview').textContent = getResponsiveOverviewLabel(spec.overviewLabel || 'Overview');
             document.getElementById('btn-follow').textContent = spec.followLabel || 'Follow';
             document.getElementById('btn-solar-system').style.display = spec.showSolarSystem === false ? 'none' : '';
+            rebuildMissionMenuList();
+            setMissionMenuOpen(false);
         }
 
         function hydrateEventMenu(selectedEventId = null) {
             const select = document.getElementById('event');
             if (!select) return;
             select.innerHTML = EVENT_IDS.map((id) =>
-                `<option value="${id}">${EVENT_LABELS[id] || id}</option>`
+                `<option value="${id}" data-follow-hash="">${EVENT_LABELS[id] || id}</option>`
             ).join('');
             if (selectedEventId && EVENT_OPTIONS.has(selectedEventId)) {
                 select.value = selectedEventId;
             }
+            populateMissionMenuFollowHashes();
         }
+
+        async function populateMissionMenuFollowHashes() {
+            const select = document.getElementById('event');
+            if (!select) return;
+            await Promise.allSettled(EVENT_IDS.map(async (id) => {
+                const spec = await loadEventSpecById(id);
+                const option = select.querySelector(`option[value="${id}"]`);
+                if (option) {
+                    option.dataset.followHash = spec.followHash || '';
+                }
+            }));
+            rebuildMissionMenuList();
+        }
+
+        function rebuildMissionMenuList() {
+            const list = document.getElementById('mission-menu-list');
+            if (!list) return;
+            const select = document.getElementById('event');
+            list.innerHTML = EVENT_IDS.map((id) => {
+                const label = EVENT_LABELS[id] || id;
+                const option = select?.querySelector(`option[value="${id}"]`);
+                const followHash = option?.dataset.followHash || '';
+                const isActive = id === currentEventId ? ' active' : '';
+                return `
+                    <button type="button" class="mission-menu-item${isActive}" data-event-id="${id}" data-follow-hash="${followHash}" onclick="selectMissionFromMenu('${id}')">
+                        <div class="mission-menu-item-label">${id}</div>
+                        <div class="mission-menu-item-name">${label}</div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function selectMissionFromMenu(missionId) {
+            const select = document.getElementById('event');
+            const option = select?.querySelector(`option[value="${missionId}"]`);
+            if (select) select.value = missionId;
+            if (option?.dataset.followHash && getHashFollowValue()) {
+                setFollowHash(option.dataset.followHash);
+            }
+            onEventChange(missionId);
+        }
+        window.selectMissionFromMenu = selectMissionFromMenu;
 
         function parseEventVector(value, fallback = new THREE.Vector3()) {
             if (!Array.isArray(value) || value.length < 3) return fallback.clone();
@@ -4710,6 +4940,7 @@
             syncEventVehicleVisibility();
             updateBrowserTitle();
             if (updateHash) setEventHash(spec.id);
+            setMissionMenuOpen(false);
             if (focusDefaultView) {
                 focusOverview(false);
             }
@@ -5243,6 +5474,7 @@
 
         window.onEventChange = async (value) => {
             const missionId = EVENT_OPTIONS.has(value) ? value : DEFAULT_EVENT_ID;
+            setMissionMenuOpen(false);
             await applyEventSpecById(missionId, { updateHash: true, focusDefaultView: true });
             if (currentEventKind === 'orion') {
                 await ensureHistoricOrionTrajectoryLoaded();
