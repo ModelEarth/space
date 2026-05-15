@@ -56,6 +56,15 @@
             color: #fff;
         }
         #canvas-container { width: 100%; height: 100%; }
+        #spaceTracker #headsup {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            pointer-events: none;
+            z-index: 110;
+            padding: 24px 32px;
+        }
 
         #telemetry {
             position: absolute; bottom: calc(28px + var(--mobile-controls-footer-offset)); left: 32px; z-index: 110; pointer-events: none;
