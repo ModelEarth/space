@@ -1481,6 +1481,7 @@
         let currentEventLaunchWindow = null;
         let currentEventCountTimeMs = null;
         let currentEventFlightPath = null;
+        let countdownAfterRestart = false;
         let telemetrySecondaryDistanceMode = 'moon';
         let ORION_REFERENCE_LAUNCH_TIME = LAUNCH_TIME;
         const solarSystemData = [
@@ -4828,6 +4829,7 @@
             currentEventLaunchWindow = spec.launchWindow || null;
             currentEventCountTimeMs = Number.isFinite(spec.countTimeMs) ? spec.countTimeMs : null;
             currentEventFlightPath = spec.flightPath || null;
+            countdownAfterRestart = false;
             telemetrySecondaryDistanceMode = spec.defaultSecondaryDistance === 'flight' ? 'flight' : 'moon';
             currentEventShowSolarSystem = spec.showSolarSystem !== false;
             currentEventInitialView = spec.initialView;
@@ -5543,6 +5545,7 @@
             scrubSolarDateMs = null;
             currentEventTumbleSpeedApplied = false;
             zoomForwardAmount = 0;
+            countdownAfterRestart = true;
             if (earthMesh) {
                 earthMesh.rotation.y = 0;
                 if (earthNightLightsMesh) earthNightLightsMesh.rotation.copy(earthMesh.rotation);
@@ -7282,7 +7285,8 @@
                         const remainingMs = currentEventStartMs - refDateMs;
                         const isInitialState = simStartReal === null && !paused
                             && scrubDay === null && scrubSolarDateMs === null;
-                        const secondsToLaunch = isInitialState
+                        const useFullSecondPace = isInitialState || countdownAfterRestart;
+                        const secondsToLaunch = useFullSecondPace
                             ? Math.ceil(remainingMs / 1000)
                             : Math.floor(remainingMs / 1000);
                         const numEl = document.getElementById('countdown-number');
