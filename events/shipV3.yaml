@@ -8,7 +8,9 @@ mission_name: STARSHIP IFT-12
 browser_title: Starship V3 IFT-12 — Flight Tracker
 overview_label: Mission Overview
 overview_view: earth
+video_youtube_id: itxmNtK8D2k
 launch_time: 2026-05-19T22:30:00Z
+count_time: 2026-05-19T22:29:50Z
 start_date: 2026-05-19T22:30:00Z
 end_date: 2026-05-19T23:35:00Z
 launch_window:
@@ -18,8 +20,8 @@ default_secondary_distance: flight
 solar_start_date: 2026-05-19T22:30:00Z
 initial_view: earth
 path_color: '#88ccff'
-play_speed: 1000
-phase_labels: [Ascent, Stage Sep T+7, Coast, Deploy T+18, Relight, Descent, Splashdown T+65]
+play_speed: 250
+phase_labels: [Terminal Countdown, Ascent, Stage Sep T+7, Coast, Deploy T+18, Relight, Descent, Splashdown T+65]
 landing_site:
   lat_deg: -10.0
   lon_deg: 90.0

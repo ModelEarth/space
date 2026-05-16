@@ -11,7 +11,7 @@
     <script src="/localsite/js/event.js"></script>
     <script>
         (() => {
-            const DEFAULT_EVENT_ID = 'orion2026';
+            const DEFAULT_EVENT_ID = 'shipV3';
             const origin = window.location.origin || '';
             const hostname = window.location.hostname || '';
             const useNautProfile = hostname.includes('dream') || origin.includes('localhost:8887');
@@ -121,6 +121,7 @@
         }
         .event-video-wrap {
             display: none;
+            margin-top: 10px;
             width: 340px;
             background: rgba(10,12,20,0.7);
             border: 1px solid rgba(255,255,255,0.07);
@@ -571,7 +572,18 @@
             transition: color 0.2s;
         }
         #controls-hint-toggle:hover { color: #fff; }
-        #controls-hint-toggle svg { width: 16px; height: 15px; display: block; }
+        #controls-hint-toggle svg { width: 17px; height: 16px; display: block; }
+        #github-link {
+            position: absolute; top: 60px; right: 6px; z-index: 111;
+            display: flex; align-items: center; justify-content: center;
+            padding: 4px; opacity: 0.55; transition: opacity 0.2s;
+            pointer-events: auto;
+        }
+        #github-link:hover { opacity: 1; }
+        #github-link img {
+            width: 20px; height: 20px; display: block;
+            filter: invert(1) brightness(1.05);
+        }
         #controls-hint-body,
         #controls-hint-collapsible {
             display: flex; flex-direction: column; gap: 5px; align-items: flex-end;
@@ -718,6 +730,37 @@
         #btn-restart-overlay.visible,
         #btn-close-up-overlay.visible {
             display: inline-flex;
+        }
+
+        .countdown-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -55%);
+            text-align: center;
+            pointer-events: none;
+            z-index: 100;
+            display: none;
+        }
+        .countdown-overlay.visible {
+            display: block;
+        }
+        .countdown-number {
+            font-size: clamp(140px, 26vw, 320px);
+            font-weight: 800;
+            line-height: 0.9;
+            color: #ffffff;
+            letter-spacing: -0.04em;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 0 60px rgba(0, 0, 0, 0.85), 0 0 28px rgba(120, 180, 255, 0.45);
+        }
+        .countdown-label {
+            margin-top: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.55);
         }
 
         .data-source {
@@ -995,6 +1038,11 @@
     <button class="hint-btn" id="btn-restart-overlay" onclick="restartCurrentEvent()">Restart</button>
     <button class="hint-btn" id="btn-close-up-overlay" onclick="focusCloseUp()">Zoom to Mission</button>
 
+    <div id="countdown-overlay" class="countdown-overlay" aria-hidden="true">
+        <div class="countdown-number" id="countdown-number">10</div>
+        <div class="countdown-label">Terminal Countdown</div>
+    </div>
+
     <div id="canvas-container"></div>
     <script>
         if (window.SharedEventUI) {
@@ -1251,6 +1299,9 @@
     <button id="controls-hint-toggle" onclick="toggleControlsHint()" aria-label="Hide controls" title="Hide controls">
         <svg viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="1" x2="15" y2="1"/><line x1="1" y1="7" x2="15" y2="7"/><line x1="1" y1="13" x2="15" y2="13"/></svg>
     </button>
+    <a id="github-link" href="https://github.com/modelearth/space" target="_blank" rel="noopener" aria-label="GitHub repository" title="GitHub repository">
+        <img src="/localsite/img/icon/github/github.png" alt="GitHub" />
+    </a>
 
     <script>
         var CONTROLS_HINT_KEY = 'controlsHintHidden';
@@ -1324,9 +1375,11 @@
         const AU_KM = 149597870.7;
         const MS_PER_DAY = 86400000;
         const JD_J2000 = 2451545.0;
-        let LAUNCH_TIME = Date.UTC(2026, 3, 1, 22, 35, 0);
-        let MISSION_DAYS = 10;
-        let MISSION_DURATION_MS = MISSION_DAYS * MS_PER_DAY;
+        // Defaults match shipV3 (the default event) so any brief leak before the
+        // event spec finishes loading shows the right launch date / duration.
+        let LAUNCH_TIME = Date.UTC(2026, 4, 19, 22, 30, 0);
+        let MISSION_DURATION_MS = 65 * 60 * 1000;
+        let MISSION_DAYS = MISSION_DURATION_MS / MS_PER_DAY;
 
         // Real scale for bodies — only Orion is exaggerated
         const sR = SUN_RADIUS_KM * SCALE; // ~173.9
@@ -1423,6 +1476,7 @@
         let currentEventOrbit = null;
         let currentEventEarthOrbit = null;
         let currentEventLaunchWindow = null;
+        let currentEventCountTimeMs = null;
         let currentEventFlightPath = null;
         let telemetrySecondaryDistanceMode = 'moon';
         let ORION_REFERENCE_LAUNCH_TIME = LAUNCH_TIME;
@@ -3454,6 +3508,7 @@
                     localTimeLabel: `${spec.launch_window.local_time_label || ''}`.trim(),
                     windowMinutes: Number(spec.launch_window.window_minutes) || 0
                 } : null,
+                countTimeMs: parseEventDateMs(spec.count_time, null),
                 defaultSecondaryDistance: `${spec.default_secondary_distance || 'moon'}`.trim().toLowerCase(),
                 flightPath: (() => {
                     const fp = spec.flight_path;
@@ -4768,6 +4823,7 @@
             currentEventName = spec.missionName;
             currentEventBrowserTitle = spec.browserTitle;
             currentEventLaunchWindow = spec.launchWindow || null;
+            currentEventCountTimeMs = Number.isFinite(spec.countTimeMs) ? spec.countTimeMs : null;
             currentEventFlightPath = spec.flightPath || null;
             telemetrySecondaryDistanceMode = spec.defaultSecondaryDistance === 'flight' ? 'flight' : 'moon';
             currentEventShowSolarSystem = spec.showSolarSystem !== false;
@@ -4816,9 +4872,11 @@
             currentEventEarthOrbit = spec.earthOrbit || null;
             currentEventRoute = spec.route || [];
             currentEventSegments = spec.kind === 'custom' ? buildCustomEventSegments(currentEventRoute) : [];
-            currentEventSceneStartMs = Number.isFinite(spec.sceneStartMs)
-                ? spec.sceneStartMs
-                : (Number.isFinite(spec.sceneStartOverrideMs) ? spec.sceneStartOverrideMs : spec.startMs);
+            currentEventSceneStartMs = Number.isFinite(spec.countTimeMs)
+                ? spec.countTimeMs
+                : (Number.isFinite(spec.sceneStartMs)
+                    ? spec.sceneStartMs
+                    : (Number.isFinite(spec.sceneStartOverrideMs) ? spec.sceneStartOverrideMs : spec.startMs));
             currentEventStartMs = spec.startMs;
             currentEventEndMs = spec.endMs;
             currentEventNeedsStartPrompt = currentEventEndMs <= Date.now();
@@ -4834,8 +4892,8 @@
                 MISSION_DURATION_MS = MISSION_DAYS * MS_PER_DAY;
             } else {
                 LAUNCH_TIME = spec.startMs;
-                MISSION_DURATION_MS = Math.max(MS_PER_DAY, spec.endMs - spec.startMs);
-                MISSION_DAYS = Math.max(1, MISSION_DURATION_MS / MS_PER_DAY);
+                MISSION_DURATION_MS = Math.max(1, spec.endMs - spec.startMs);
+                MISSION_DAYS = MISSION_DURATION_MS / MS_PER_DAY;
             }
 
             if (spec.kind === 'mars') {
@@ -5353,7 +5411,17 @@
             if (scrubSolarDateMs !== null) return scrubSolarDateMs;
             if (paused && pausedSolarDateMs !== null) return pausedSolarDateMs;
             if (simStartReal !== null && solarSimStartDateMs !== null) {
-                return solarSimStartDateMs + (now - simStartReal) * speedMult;
+                const realElapsedMs = now - simStartReal;
+                // During the terminal countdown (count_time → start_date), run at 1x real time.
+                // Switch to the configured play speed once we cross the launch time.
+                if (currentEventCountTimeMs !== null && solarSimStartDateMs < currentEventStartMs) {
+                    const countdownRemainingMs = currentEventStartMs - solarSimStartDateMs;
+                    if (realElapsedMs <= countdownRemainingMs) {
+                        return solarSimStartDateMs + realElapsedMs;
+                    }
+                    return currentEventStartMs + (realElapsedMs - countdownRemainingMs) * speedMult;
+                }
+                return solarSimStartDateMs + realElapsedMs * speedMult;
             }
             return solarBaseDateMs;
         }
@@ -5369,7 +5437,7 @@
         function updatePlaybackButton() {
             const btn = document.getElementById('btn-play-pause');
             const icon = btn.querySelector('.timeline-playback-icon');
-            const isPausedState = paused || scrubDay !== null || scrubSolarDateMs !== null;
+            const isPausedState = paused || scrubDay !== null || scrubSolarDateMs !== null || simStartReal === null;
             icon.innerHTML = isPausedState ? '&#9654;' : '<svg viewBox="-1 0 12 14" width="10" height="14" fill="currentColor"><rect x="-1" y="0" width="4.5" height="14" rx="1"/><rect x="6.5" y="0" width="4.5" height="14" rx="1"/></svg>';
             btn.setAttribute('aria-label', isPausedState ? 'Play playback' : 'Pause playback');
             btn.classList.toggle('speed-active', isPausedState);
@@ -5994,7 +6062,7 @@
 
         window.togglePlayback = () => {
             const now = Date.now();
-            if (paused || scrubDay !== null || scrubSolarDateMs !== null) {
+            if (paused || scrubDay !== null || scrubSolarDateMs !== null || simStartReal === null) {
                 if (isAtOrPastEventEnd(now)) {
                     window.restartCurrentEvent();
                     return;
@@ -6872,9 +6940,13 @@
 
             // ── Earth rotation (360° in 24h, accelerated with sim) ──
             const earthAngularVel = (2 * Math.PI) / 86400; // rad/s
+            const inTerminalCountdown =
+                currentEventCountTimeMs !== null && solarDateMs < currentEventStartMs;
             const earthRotationSpeed =
-                (paused || scrubbing)
+                (paused || scrubbing || scrubDay !== null || scrubSolarDateMs !== null || simStartReal === null)
                     ? 0
+                    : inTerminalCountdown
+                    ? 1
                     : speedMult > 1
                     ? speedMult
                     : 1;
@@ -7038,12 +7110,13 @@
             // Human-readable date/time in user's timezone
             const missionDate = new Date(LAUNCH_TIME + hudElapsedMs);
             const solarDateValue = msToDateInputValue(solarDateMs);
-            if (shouldUpdateHudDom && solarDateValue !== lastPlanetDateInputValue) {
+            const timelineReady = Boolean(currentEventSpec);
+            if (shouldUpdateHudDom && timelineReady && solarDateValue !== lastPlanetDateInputValue) {
                 setValueIfChanged(planetDateInputEl, solarDateValue);
                 lastPlanetDateInputValue = solarDateValue;
             }
 
-            if (shouldUpdateHudDom) {
+            if (shouldUpdateHudDom && timelineReady) {
                 if (activeView === 'solar-system' || isEventView()) {
                     setTextIfChanged(timelineTitleTextEl, 'Planet Date');
                     setTextIfChanged(metDisplayEl, solarDate.toLocaleDateString(undefined, {
@@ -7064,13 +7137,17 @@
 
             // Update timeline slider (only when not being dragged)
             if (shouldUpdateHudDom && !scrubbing) {
-                const sliderVal = isEventTimelineView()
+                const sliderVal = !timelineReady
+                    ? 0
+                    : isEventTimelineView()
                     ? missionProgress * 10000
                     : Math.max(0, (hudDay - TLI_DAY) / (MISSION_DAYS - TLI_DAY)) * 10000;
                 setValueIfChanged(timelineSliderEl, Math.round(Math.min(10000, sliderVal)));
             }
             // Update slider gradient fill
-            const pct = isEventTimelineView()
+            const pct = !timelineReady
+                ? 0
+                : isEventTimelineView()
                 ? Math.max(0, Math.min(100, missionProgress * 100))
                 : Math.max(0, Math.min(100, (hudDay - TLI_DAY) / (MISSION_DAYS - TLI_DAY) * 100));
             if (shouldUpdateHudDom) {
@@ -7116,11 +7193,12 @@
                 setStyleIfChanged(document.getElementById('pl-transit'), 'transform', 'translateX(-20px)');
                 setStyleIfChanged(document.getElementById('pl-flyby'), 'transform', 'translateX(-10px)');
             } else if (shouldUpdateHudDom && currentEventKind !== 'orion') {
-                const labels = currentEventPhaseLabels || ['Launch', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Complete'];
+                const allLabels = currentEventPhaseLabels || ['Launch', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Complete'];
+                const labelOffset = currentEventCountTimeMs !== null ? 1 : 0;
                 const boundaries = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1.0001];
                 ['pl-launch', 'pl-tli', 'pl-transit', 'pl-flyby', 'pl-return', 'pl-reentry'].forEach((id, index) => {
                     const el = document.getElementById(id);
-                    setTextIfChanged(el, labels[index] || '');
+                    setTextIfChanged(el, allLabels[index + labelOffset] || '');
                     toggleClassIfChanged(el, 'active', missionProgress >= boundaries[index] && missionProgress < boundaries[index + 1]);
                 });
                 setStyleIfChanged(document.getElementById('pl-transit'), 'transform', '');
@@ -7149,8 +7227,13 @@
                     phase = currentEventPhaseText;
                 } else {
                     const labels = currentEventPhaseLabels || ['Mission In Progress'];
-                    const index = Math.min(labels.length - 1, Math.max(0, Math.floor(missionProgress * labels.length)));
-                    phase = labels[index] || 'Mission In Progress';
+                    if (currentEventCountTimeMs !== null && solarDateMs < currentEventStartMs) {
+                        phase = labels[0] || 'Terminal Countdown';
+                    } else {
+                        const missionLabels = currentEventCountTimeMs !== null ? labels.slice(1) : labels;
+                        const index = Math.min(missionLabels.length - 1, Math.max(0, Math.floor(missionProgress * missionLabels.length)));
+                        phase = missionLabels[index] || 'Mission In Progress';
+                    }
                 }
             } else {
                 if (hudDay < 1.06) phase = 'Earth Orbit';
@@ -7164,19 +7247,43 @@
                 setTextIfChanged(phaseTextEl, phase);
             }
 
-            // MET counter
-            const metMs = isEventTimelineView()
-                ? Math.max(0, missionTimelineMs - currentEventStartMs)
+            // MET counter — shows T-… during the terminal countdown, T+… after liftoff.
+            // Updated every frame (no throttle) so the seconds tick visibly during the 10s countdown.
+            const metMsSigned = isEventTimelineView()
+                ? (currentEventCountTimeMs !== null && solarDateMs < currentEventStartMs
+                    ? solarDateMs - currentEventStartMs
+                    : Math.max(0, missionTimelineMs - currentEventStartMs))
                 : Math.max(0, hudElapsedMs);
-            const metD = Math.floor(metMs / MS_PER_DAY);
-            const metH = Math.floor((metMs % MS_PER_DAY) / 3600000);
-            const metM = Math.floor((metMs % 3600000) / 60000);
-            const metS = Math.floor((metMs % 60000) / 1000);
-            if (shouldUpdateHudDom) {
-                setTextIfChanged(
-                    metCounterEl,
-                    `T+${String(metD).padStart(2,'0')}:${String(metH).padStart(2,'0')}:${String(metM).padStart(2,'0')}:${String(metS).padStart(2,'0')}`
-                );
+            const metAbs = Math.abs(metMsSigned);
+            const metSign = metMsSigned < 0 ? '-' : '+';
+            const metD = Math.floor(metAbs / MS_PER_DAY);
+            const metH = Math.floor((metAbs % MS_PER_DAY) / 3600000);
+            const metM = Math.floor((metAbs % 3600000) / 60000);
+            const metS = Math.floor((metAbs % 60000) / 1000);
+            setTextIfChanged(
+                metCounterEl,
+                `T${metSign}${String(metD).padStart(2,'0')}:${String(metH).padStart(2,'0')}:${String(metM).padStart(2,'0')}:${String(metS).padStart(2,'0')}`
+            );
+
+            // Terminal Countdown overlay (visible from count_time through liftoff).
+            // Updated every frame (not throttled) so the number ticks down as soon as Play is hit.
+            {
+                const countdownOverlayEl = document.getElementById('countdown-overlay');
+                if (countdownOverlayEl) {
+                    const showCountdown = timelineReady
+                        && currentEventCountTimeMs !== null
+                        && solarDateMs < currentEventStartMs;
+                    countdownOverlayEl.classList.toggle('visible', showCountdown);
+                    if (showCountdown) {
+                        const refDateMs = Math.max(currentEventCountTimeMs, solarDateMs);
+                        const remainingMs = currentEventStartMs - refDateMs;
+                        const secondsToLaunch = simStartReal === null
+                            ? Math.ceil(remainingMs / 1000)
+                            : Math.floor(remainingMs / 1000);
+                        const numEl = document.getElementById('countdown-number');
+                        if (numEl) setTextIfChanged(numEl, String(Math.max(0, secondsToLaunch)));
+                    }
+                }
             }
 
             // Distances

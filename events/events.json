@@ -1,5 +1,5 @@
 {
-  "defaultEventId": "",
+  "defaultEventId": "shipV3",
   "events": [
     { "id": "shipV3",      "label": "Starship V3",        "specFile": "shipV3.yaml"        },
     { "id": "starman2018",  "label": "Starman 2018",      "specFile": "starman2018.config" },
