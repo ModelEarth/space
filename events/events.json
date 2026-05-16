@@ -1,6 +1,7 @@
 {
   "defaultEventId": "",
   "events": [
+    { "id": "shipV3",      "label": "Starship V3",        "specFile": "shipV3.yaml"        },
     { "id": "starman2018",  "label": "Starman 2018",      "specFile": "starman2018.config" },
     { "id": "orion2026",   "label": "Orion 2026",         "specFile": "orion2026.yaml"     },
     { "id": "iss",         "label": "ISS 2030",           "specFile": "iss.yaml"           },

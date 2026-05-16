@@ -108,6 +108,7 @@
             border-radius: 14px; padding: 14px 18px; min-width: 145px;
             backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
         }
+        #telem-card-moon { cursor: pointer; }
         .telem-label {
             font-size: 9px; font-weight: 700; letter-spacing: 2px;
             text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 6px;
@@ -1022,8 +1023,8 @@
                 <div class="telem-label" id="dist-primary-label">Earth Distance</div>
                 <div><span class="telem-value" id="dist-earth">—</span><span class="telem-unit">km</span></div>
             </div>
-            <div class="telem-card" id="telem-card-moon">
-                <div class="telem-label">Moon Distance</div>
+            <div class="telem-card" id="telem-card-moon" onclick="toggleTelemetrySecondaryDistance()">
+                <div class="telem-label" id="dist-secondary-label">Moon Distance</div>
                 <div><span class="telem-value" id="dist-moon">—</span><span class="telem-unit">km</span></div>
             </div>
             <div class="telem-card">
@@ -1421,6 +1422,9 @@
         let currentEventSegments = [];
         let currentEventOrbit = null;
         let currentEventEarthOrbit = null;
+        let currentEventLaunchWindow = null;
+        let currentEventFlightPath = null;
+        let telemetrySecondaryDistanceMode = 'moon';
         let ORION_REFERENCE_LAUNCH_TIME = LAUNCH_TIME;
         const solarSystemData = [
             {
@@ -3132,7 +3136,7 @@
                 }
                 select.value = spec.id;
             }
-            document.getElementById('mission-title-text').textContent = spec.kind === 'orion' ? 'NASA · CSA' : '';
+            document.getElementById('mission-title-text').textContent = formatMissionTitleText(spec);
             {
                 const missionNameEl = document.getElementById('mission-name');
                 const missionName = spec.missionName || '';
@@ -3302,6 +3306,10 @@
             syncTelemetryNarrowState();
         };
 
+        window.toggleTelemetrySecondaryDistance = () => {
+            telemetrySecondaryDistanceMode = telemetrySecondaryDistanceMode === 'moon' ? 'flight' : 'moon';
+        };
+
         function syncMobileControlsFooter() {
             const footer = document.getElementById('timeline-footer');
             const panHome = document.getElementById('timeline-pan-home');
@@ -3442,6 +3450,46 @@
                 followHash,
                 missionName: spec.mission_name || missionId.toUpperCase(),
                 browserTitle: spec.browser_title || DEFAULT_BROWSER_TITLE,
+                launchWindow: spec.launch_window ? {
+                    localTimeLabel: `${spec.launch_window.local_time_label || ''}`.trim(),
+                    windowMinutes: Number(spec.launch_window.window_minutes) || 0
+                } : null,
+                defaultSecondaryDistance: `${spec.default_secondary_distance || 'moon'}`.trim().toLowerCase(),
+                flightPath: (() => {
+                    const fp = spec.flight_path;
+                    if (!fp) return null;
+                    const rawWps = Array.isArray(fp.waypoints) ? fp.waypoints : null;
+                    let waypoints = rawWps
+                        ? rawWps
+                            .map((w) => ({ latDeg: Number(w?.lat_deg), lonDeg: Number(w?.lon_deg), name: `${w?.name || ''}` }))
+                            .filter((w) => Number.isFinite(w.latDeg) && Number.isFinite(w.lonDeg))
+                        : [];
+                    if (waypoints.length < 2 && Number.isFinite(Number(fp.launch_lat_deg)) && Number.isFinite(Number(fp.splashdown_lat_deg))) {
+                        waypoints = [
+                            { latDeg: Number(fp.launch_lat_deg), lonDeg: Number(fp.launch_lon_deg), name: 'launch' },
+                            { latDeg: Number(fp.splashdown_lat_deg), lonDeg: Number(fp.splashdown_lon_deg), name: 'splashdown' }
+                        ];
+                    }
+                    if (waypoints.length < 2) return null;
+                    const segmentKm = [];
+                    let totalKm = 0;
+                    for (let i = 0; i < waypoints.length - 1; i += 1) {
+                        const d = greatCircleDistanceKm(
+                            waypoints[i].latDeg, waypoints[i].lonDeg,
+                            waypoints[i + 1].latDeg, waypoints[i + 1].lonDeg
+                        );
+                        segmentKm.push(d);
+                        totalKm += d;
+                    }
+                    return {
+                        waypoints,
+                        segmentKm,
+                        totalSurfaceKm: totalKm,
+                        peakAltitudeKm: Number(fp.peak_altitude_km) || 0,
+                        sampleCount: Math.max(32, Number(fp.sample_count) || 144),
+                        totalDistanceKm: Number(fp.total_distance_km) || 0
+                    };
+                })(),
                 initialView: spec.initial_view || 'earth-moon',
                 overviewLabel: spec.overview_label || 'Mission Overview',
                 overviewView: spec.overview_view || spec.initial_view || 'earth-moon',
@@ -3515,7 +3563,9 @@
                     sampleCount: Math.max(240, Number(spec.earth_orbit?.sample_count ?? spec.sample_count) || 1440),
                     visualSampleCount: Math.max(48, Number(spec.earth_orbit?.visual_sample_count) || 144),
                     visualOpacity: Number.isFinite(Number(spec.earth_orbit?.visual_opacity)) ? Number(spec.earth_orbit.visual_opacity) : 0.34,
-                    glowOpacity: Number.isFinite(Number(spec.earth_orbit?.glow_opacity)) ? Number(spec.earth_orbit.glow_opacity) : 0.08
+                    glowOpacity: Number.isFinite(Number(spec.earth_orbit?.glow_opacity)) ? Number(spec.earth_orbit.glow_opacity) : 0.08,
+                    arcOnly: Boolean(spec.earth_orbit?.arc_only),
+                    suborbitalPeakAltitudeKm: Number(spec.earth_orbit?.suborbital_peak_altitude_km) || 0
                 } : null,
                 route: Array.isArray(spec.route) ? spec.route.map((waypoint) => ({
                     dateMs: Date.parse(waypoint.date),
@@ -3771,6 +3821,104 @@
             for (let i = 0; i < samples; i += 1) {
                 const sampleDateMs = startDateMs + (i / Math.max(1, samples - 1)) * (endDateMs - startDateMs);
                 pts.push(getEarthOrbitEventLocalPos(orbit, sampleDateMs));
+            }
+            return pts;
+        }
+
+        const SUBORBITAL_EARTH_RADIUS_KM = 6371;
+
+        // Profile shape for a suborbital ballistic arc.
+        // Returns 0 at t=0 and t=1, 1 at t=0.5; sqrt-of-sin gives a fast rise,
+        // long plateau near apogee, and fast descent that roughly matches a
+        // Starship-style ascent / coast / re-entry profile.
+        function suborbitalAltitudeFraction(t) {
+            const tc = Math.max(0, Math.min(1, t));
+            return Math.sqrt(Math.sin(Math.PI * tc));
+        }
+
+        function projectToSuborbitalAltitude(orbitPoint, t, peakAltitudeKm) {
+            const orbitRadiusScene = orbitPoint.length();
+            if (orbitRadiusScene < 1e-9) return orbitPoint.clone();
+            const altitudeKm = peakAltitudeKm * suborbitalAltitudeFraction(t);
+            const desiredRadiusScene = (SUBORBITAL_EARTH_RADIUS_KM + altitudeKm) * SCALE;
+            return orbitPoint.clone().multiplyScalar(desiredRadiusScene / orbitRadiusScene);
+        }
+
+        function getSuborbitalArcLocalPos(orbit, dateMs, startDateMs, endDateMs, peakAltitudeKm) {
+            const orbitPoint = getEarthOrbitEventLocalPos(orbit, dateMs);
+            const span = Math.max(1, endDateMs - startDateMs);
+            const t = (dateMs - startDateMs) / span;
+            return projectToSuborbitalAltitude(orbitPoint, t, peakAltitudeKm);
+        }
+
+        function buildSuborbitalArcPoints(orbit, startDateMs, endDateMs, peakAltitudeKm, samples = 144) {
+            const pts = [];
+            for (let i = 0; i < samples; i += 1) {
+                const t = i / Math.max(1, samples - 1);
+                const sampleDateMs = startDateMs + t * (endDateMs - startDateMs);
+                const orbitPoint = getEarthOrbitEventLocalPos(orbit, sampleDateMs);
+                pts.push(projectToSuborbitalAltitude(orbitPoint, t, peakAltitudeKm));
+            }
+            return pts;
+        }
+
+        const FLIGHT_PATH_Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+        function greatCircleDistanceKm(lat1, lon1, lat2, lon2) {
+            const r = Math.PI / 180;
+            const dLat = (lat2 - lat1) * r;
+            const dLon = (lon2 - lon1) * r;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLon / 2) ** 2;
+            return SUBORBITAL_EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function slerpDirection(latLonA, latLonB, localT) {
+            const v1 = getEarthFixedVectorFromLatLon(latLonA.latDeg, latLonA.lonDeg, 1);
+            const v2 = getEarthFixedVectorFromLatLon(latLonB.latDeg, latLonB.lonDeg, 1);
+            const dot = Math.max(-1, Math.min(1, v1.dot(v2)));
+            const angle = Math.acos(dot);
+            if (angle < 1e-6) return v1;
+            const sinAngle = Math.sin(angle);
+            const a = Math.sin((1 - localT) * angle) / sinAngle;
+            const b = Math.sin(localT * angle) / sinAngle;
+            return v1.multiplyScalar(a).add(v2.multiplyScalar(b)).normalize();
+        }
+
+        function getFlightPathLocalPos(flightPath, t, earthRotation) {
+            const tc = Math.max(0, Math.min(1, t));
+            const totalSurface = flightPath.totalSurfaceKm || 1;
+            const targetKm = tc * totalSurface;
+            let cumKm = 0;
+            let segIdx = 0;
+            let localT = 0;
+            for (let i = 0; i < flightPath.segmentKm.length; i += 1) {
+                const segLen = flightPath.segmentKm[i];
+                if (targetKm <= cumKm + segLen || i === flightPath.segmentKm.length - 1) {
+                    segIdx = i;
+                    localT = segLen > 0 ? (targetKm - cumKm) / segLen : 0;
+                    break;
+                }
+                cumKm += segLen;
+            }
+            localT = Math.max(0, Math.min(1, localT));
+            const dir = slerpDirection(
+                flightPath.waypoints[segIdx],
+                flightPath.waypoints[segIdx + 1],
+                localT
+            );
+            const altitudeKm = flightPath.peakAltitudeKm * suborbitalAltitudeFraction(tc);
+            const radiusScene = (SUBORBITAL_EARTH_RADIUS_KM + altitudeKm) * SCALE;
+            dir.multiplyScalar(radiusScene);
+            if (earthRotation) dir.applyAxisAngle(FLIGHT_PATH_Y_AXIS, earthRotation);
+            return dir;
+        }
+
+        function buildFlightPathPoints(flightPath, earthRotation, samples) {
+            const count = Math.max(2, samples || flightPath.sampleCount || 144);
+            const pts = [];
+            for (let i = 0; i < count; i += 1) {
+                const t = i / (count - 1);
+                pts.push(getFlightPathLocalPos(flightPath, t, earthRotation));
             }
             return pts;
         }
@@ -4530,8 +4678,21 @@
             }
         }
 
+        function formatMissionTitleText(spec) {
+            const lw = spec?.launchWindow;
+            if (lw?.localTimeLabel) {
+                const parts = [`Launch: ${lw.localTimeLabel}`];
+                if (lw.windowMinutes > 0) parts.push(`${lw.windowMinutes}-min window`);
+                return parts.join(' · ');
+            }
+            return spec?.kind === 'orion' ? 'NASA · CSA' : '';
+        }
+
         function updateHeaderText() {
-            document.getElementById('mission-title-text').textContent = currentEventKind === 'orion' ? 'NASA · CSA' : '';
+            document.getElementById('mission-title-text').textContent = formatMissionTitleText({
+                kind: currentEventKind,
+                launchWindow: currentEventLaunchWindow
+            });
             {
                 const missionNameEl = document.getElementById('mission-name');
                 const missionName = currentEventName || '';
@@ -4606,6 +4767,9 @@
             currentEventFollowHash = spec.followHash || 'orion';
             currentEventName = spec.missionName;
             currentEventBrowserTitle = spec.browserTitle;
+            currentEventLaunchWindow = spec.launchWindow || null;
+            currentEventFlightPath = spec.flightPath || null;
+            telemetrySecondaryDistanceMode = spec.defaultSecondaryDistance === 'flight' ? 'flight' : 'moon';
             currentEventShowSolarSystem = spec.showSolarSystem !== false;
             currentEventInitialView = spec.initialView;
             currentEventOverviewLabel = spec.overviewLabel;
@@ -5308,6 +5472,10 @@
             scrubSolarDateMs = null;
             currentEventTumbleSpeedApplied = false;
             zoomForwardAmount = 0;
+            if (earthMesh) {
+                earthMesh.rotation.y = 0;
+                if (earthNightLightsMesh) earthNightLightsMesh.rotation.copy(earthMesh.rotation);
+            }
             document.getElementById('speed-dropdown').classList.remove('open');
             refreshSpeedControls();
             updatePlaybackButton();
@@ -5845,6 +6013,10 @@
                 paused = false;
                 pausedDay = null;
                 pausedSolarDateMs = null;
+                if (earthMesh) {
+                    earthMesh.rotation.y = 0;
+                    if (earthNightLightsMesh) earthNightLightsMesh.rotation.copy(earthMesh.rotation);
+                }
                 showResetButtonTemporarily();
             } else {
                 pausedDay = getCurrentSceneDay(now);
@@ -5883,7 +6055,7 @@
             if (isEventTimelineView()) {
                 const progress = val / 10000;
                 const targetSolarDateMs = clampMissionDateMs(
-                    currentEventStartMs + progress * Math.max(MS_PER_DAY, currentEventEndMs - currentEventStartMs)
+                    currentEventStartMs + progress * Math.max(1, currentEventEndMs - currentEventStartMs)
                 );
                 if (preserveMotion && !paused) {
                     scrubDay = null;
@@ -6263,19 +6435,64 @@
             } else if (currentEventKind === 'earth-orbit' && currentEventEarthOrbit) {
                 const earthLocal = getPlanetLocalPos(solarPlanets.Earth.data, sceneSolarDateMs);
                 const earthWorldForOrbit = earthLocal.clone().add(SOLAR_CENTER);
-                const missionOrbitLocal = buildEarthOrbitVisualLoopPoints(
-                    currentEventEarthOrbit,
-                    solarDateMs,
-                    currentEventEarthOrbit.visualSampleCount || 144
-                );
+                const useFlightPath = Boolean(currentEventFlightPath);
+                const suborbitalPeakKm = currentEventEarthOrbit.suborbitalPeakAltitudeKm || 0;
+                const useSuborbitalProfile = !useFlightPath && currentEventEarthOrbit.arcOnly && suborbitalPeakKm > 0;
+                const earthRotationY = earthMesh?.rotation?.y || 0;
+                let missionOrbitLocal;
+                if (useFlightPath) {
+                    missionOrbitLocal = buildFlightPathPoints(
+                        currentEventFlightPath,
+                        earthRotationY,
+                        currentEventFlightPath.sampleCount
+                    );
+                } else if (useSuborbitalProfile) {
+                    missionOrbitLocal = buildSuborbitalArcPoints(
+                        currentEventEarthOrbit,
+                        currentEventStartMs,
+                        currentEventEndMs,
+                        suborbitalPeakKm,
+                        currentEventEarthOrbit.visualSampleCount || 144
+                    );
+                } else if (currentEventEarthOrbit.arcOnly) {
+                    missionOrbitLocal = buildEarthOrbitEventPoints(
+                        currentEventEarthOrbit,
+                        currentEventStartMs,
+                        currentEventEndMs,
+                        currentEventEarthOrbit.visualSampleCount || 144
+                    );
+                } else {
+                    missionOrbitLocal = buildEarthOrbitVisualLoopPoints(
+                        currentEventEarthOrbit,
+                        solarDateMs,
+                        currentEventEarthOrbit.visualSampleCount || 144
+                    );
+                }
                 missionRoutePointsLocal = missionOrbitLocal.map((point) => point.clone().add(earthLocal));
                 missionRoutePointsWorld = missionRoutePointsLocal.map((point) => point.clone().add(SOLAR_CENTER));
-                const orbitState = getEarthOrbitDecayState(currentEventEarthOrbit, solarDateMs);
-                missionProgressT = (((orbitState.meanAnomalyDeg % 360) + 360) % 360) / 360;
-                missionCraftWorld = earthWorldForOrbit.add(getEarthOrbitEventLocalPos(currentEventEarthOrbit, solarDateMs));
+                if (useFlightPath || currentEventEarthOrbit.arcOnly) {
+                    missionProgressT = Math.max(0, Math.min(1, (solarDateMs - currentEventStartMs) / Math.max(1, currentEventEndMs - currentEventStartMs)));
+                } else {
+                    const orbitState = getEarthOrbitDecayState(currentEventEarthOrbit, solarDateMs);
+                    missionProgressT = (((orbitState.meanAnomalyDeg % 360) + 360) % 360) / 360;
+                }
+                let craftLocalPos;
+                let nextCraftLocalPos;
+                if (useFlightPath) {
+                    craftLocalPos = getFlightPathLocalPos(currentEventFlightPath, missionProgressT, earthRotationY);
+                    const nextT = Math.min(1, missionProgressT + (2 * 60 * 1000) / Math.max(1, currentEventEndMs - currentEventStartMs));
+                    nextCraftLocalPos = getFlightPathLocalPos(currentEventFlightPath, nextT, earthRotationY);
+                } else if (useSuborbitalProfile) {
+                    craftLocalPos = getSuborbitalArcLocalPos(currentEventEarthOrbit, solarDateMs, currentEventStartMs, currentEventEndMs, suborbitalPeakKm);
+                    nextCraftLocalPos = getSuborbitalArcLocalPos(currentEventEarthOrbit, solarDateMs + 2 * 60 * 1000, currentEventStartMs, currentEventEndMs, suborbitalPeakKm);
+                } else {
+                    craftLocalPos = getEarthOrbitEventLocalPos(currentEventEarthOrbit, solarDateMs);
+                    nextCraftLocalPos = getEarthOrbitEventLocalPos(currentEventEarthOrbit, solarDateMs + 2 * 60 * 1000);
+                }
+                missionCraftWorld = earthWorldForOrbit.add(craftLocalPos);
                 const tangentSampleMs = solarDateMs + 2 * 60 * 1000;
                 const nextEarthWorldForOrbit = getPlanetWorldPos(solarPlanets.Earth.data, tangentSampleMs);
-                const nextMissionCraftWorld = nextEarthWorldForOrbit.add(getEarthOrbitEventLocalPos(currentEventEarthOrbit, tangentSampleMs));
+                const nextMissionCraftWorld = nextEarthWorldForOrbit.add(nextCraftLocalPos);
                 activeEventWorldDir.copy(nextMissionCraftWorld.clone().sub(missionCraftWorld));
                 if (activeEventWorldDir.lengthSq() < 1e-6) activeEventWorldDir.set(0, 0, 1);
                 activeEventWorldDir.normalize();
@@ -6337,11 +6554,12 @@
                 isEventView() ||
                 activeView === 'solar-system' ||
                 (currentEventKind === 'earth-orbit' && (cameraMode === 'focus-earth' || cameraMode === 'follow-orion'));
-            mars2033TransferLine.visible = showMissionTransfer && currentEventKind !== 'earth-orbit';
-            mars2033TraveledLine.visible = showMissionTransfer && currentEventKind !== 'earth-orbit';
-            mars2033TransferGlow.visible = showMissionTransfer && currentEventKind !== 'earth-orbit';
-            earthOrbitLoopLine.visible = showMissionTransfer && currentEventKind === 'earth-orbit' && cameraMode !== 'follow-orion';
-            earthOrbitLoopGlow.visible = showMissionTransfer && currentEventKind === 'earth-orbit' && cameraMode !== 'follow-orion';
+            const earthOrbitArcOnly = currentEventKind === 'earth-orbit' && currentEventEarthOrbit?.arcOnly;
+            mars2033TransferLine.visible = showMissionTransfer && (currentEventKind !== 'earth-orbit' || earthOrbitArcOnly);
+            mars2033TraveledLine.visible = showMissionTransfer && (currentEventKind !== 'earth-orbit' || earthOrbitArcOnly);
+            mars2033TransferGlow.visible = showMissionTransfer && (currentEventKind !== 'earth-orbit' || earthOrbitArcOnly);
+            earthOrbitLoopLine.visible = showMissionTransfer && currentEventKind === 'earth-orbit' && !earthOrbitArcOnly && cameraMode !== 'follow-orion';
+            earthOrbitLoopGlow.visible = showMissionTransfer && currentEventKind === 'earth-orbit' && !earthOrbitArcOnly && cameraMode !== 'follow-orion';
             mars2033CraftGroup.visible = currentEventVehicle === 'mars' && (showMissionTransfer || cameraMode === 'follow-orion');
             mars2033Orb.material.opacity = 0.92;
             activeEventWorldPos.copy(missionCraftWorld);
@@ -6778,10 +6996,11 @@
             const hudT = hudDay / MISSION_DAYS;
             const hudElapsedMs = hudDay * MS_PER_DAY;
             const missionTimelineMs = clampMissionDateMs(solarDateMs);
-            const missionProgress = (missionTimelineMs - currentEventStartMs) / Math.max(MS_PER_DAY, currentEventEndMs - currentEventStartMs);
+            const missionSpanMs = Math.max(1, currentEventEndMs - currentEventStartMs);
+            const missionProgress = (missionTimelineMs - currentEventStartMs) / missionSpanMs;
             const missionDay = Math.max(0, (missionTimelineMs - currentEventStartMs) / MS_PER_DAY);
             const marsArrivalProgress = currentEventKind === 'mars'
-                ? (MARS_2033_ARRIVE_MARS_MS - currentEventStartMs) / Math.max(MS_PER_DAY, currentEventEndMs - currentEventStartMs)
+                ? (MARS_2033_ARRIVE_MARS_MS - currentEventStartMs) / missionSpanMs
                 : 0;
             const marsDepartProgress = currentEventKind === 'mars'
                 ? (MARS_2033_DEPART_MARS_MS - currentEventStartMs) / Math.max(MS_PER_DAY, currentEventEndMs - currentEventStartMs)
@@ -6806,7 +7025,8 @@
                 cameraMode,
                 paused ? 'paused' : 'running',
                 scrubbing ? 'scrubbing' : 'steady',
-                telemetryDistanceToggleShowsMoon ? 'moon' : 'earth'
+                telemetryDistanceToggleShowsMoon ? 'moon' : 'earth',
+                telemetrySecondaryDistanceMode
             ].join('|');
             const hudDomNow = Date.now();
             const shouldUpdateHudDom = hudDomUpdateKey !== lastHudDomUpdateKey || (hudDomNow - lastHudDomUpdateMs) >= 250;
@@ -6963,13 +7183,32 @@
             const activeCraftWorld = currentEventKind === 'orion' ? orionWorld : activeEventWorldPos;
             const dEarth = Math.max(0, activeCraftWorld.distanceTo(earthGroup.position) / SCALE - EARTH_RADIUS_KM);
             const dMoon = Math.max(0, activeCraftWorld.distanceTo(moonGroup.position) / SCALE - MOON_RADIUS_KM);
+            let dFlight = 0;
+            if (missionRoutePointsWorld && missionRoutePointsWorld.length >= 2) {
+                const lastFloat = Math.max(0, Math.min(1, missionProgressT)) * (missionRoutePointsWorld.length - 1);
+                const lastIdx = Math.floor(lastFloat);
+                for (let i = 0; i < lastIdx; i += 1) {
+                    dFlight += missionRoutePointsWorld[i + 1].distanceTo(missionRoutePointsWorld[i]);
+                }
+                if (lastIdx < missionRoutePointsWorld.length - 1) {
+                    const remainder = lastFloat - lastIdx;
+                    dFlight += missionRoutePointsWorld[lastIdx + 1].distanceTo(missionRoutePointsWorld[lastIdx]) * remainder;
+                }
+                dFlight /= SCALE;
+            }
             const formattedEarthDistance = formatKm(dEarth);
             const formattedMoonDistance = formatKm(dMoon);
+            const formattedFlightDistance = formatKm(dFlight);
             const showMoonInPrimaryDistanceSlot = telemetryDistanceToggleShowsMoon && getTrackerWidth() <= 500;
+            const secondaryShowsFlight = telemetrySecondaryDistanceMode === 'flight';
+            const secondaryLabel = secondaryShowsFlight ? 'Flight Distance' : 'Moon Distance';
+            const secondaryValue = secondaryShowsFlight ? formattedFlightDistance : formattedMoonDistance;
 
             if (shouldUpdateHudDom) {
                 setTextIfChanged(distEarthEl, showMoonInPrimaryDistanceSlot ? formattedMoonDistance : formattedEarthDistance);
-                setTextIfChanged(distMoonEl, formattedMoonDistance);
+                setTextIfChanged(distMoonEl, secondaryValue);
+                const secondaryLabelEl = document.getElementById('dist-secondary-label');
+                if (secondaryLabelEl) setTextIfChanged(secondaryLabelEl, secondaryLabel);
             }
 
             // Velocity
