@@ -741,9 +741,12 @@
             pointer-events: none;
             z-index: 100;
             display: none;
+            cursor: pointer;
+            user-select: none;
         }
         .countdown-overlay.visible {
             display: block;
+            pointer-events: auto;
         }
         .countdown-number {
             font-size: clamp(140px, 26vw, 320px);
@@ -1038,7 +1041,7 @@
     <button class="hint-btn" id="btn-restart-overlay" onclick="restartCurrentEvent()">Restart</button>
     <button class="hint-btn" id="btn-close-up-overlay" onclick="focusCloseUp()">Zoom to Mission</button>
 
-    <div id="countdown-overlay" class="countdown-overlay" aria-hidden="true">
+    <div id="countdown-overlay" class="countdown-overlay" aria-hidden="true" onclick="togglePlayback()" role="button" tabindex="-1" title="Start/stop countdown">
         <div class="countdown-number" id="countdown-number">10</div>
         <div class="countdown-label">Terminal Countdown</div>
     </div>
@@ -7277,7 +7280,9 @@
                     if (showCountdown) {
                         const refDateMs = Math.max(currentEventCountTimeMs, solarDateMs);
                         const remainingMs = currentEventStartMs - refDateMs;
-                        const secondsToLaunch = simStartReal === null
+                        const isInitialState = simStartReal === null && !paused
+                            && scrubDay === null && scrubSolarDateMs === null;
+                        const secondsToLaunch = isInitialState
                             ? Math.ceil(remainingMs / 1000)
                             : Math.floor(remainingMs / 1000);
                         const numEl = document.getElementById('countdown-number');
