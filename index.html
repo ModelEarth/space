@@ -72,6 +72,7 @@
         #telemetry.has-video {
             width: 340px;
             pointer-events: auto;
+            z-index: 200;
         }
         .telem-grid { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; }
         #telemetry:not(.ready) .telem-grid {
@@ -121,6 +122,7 @@
         }
         .event-video-wrap {
             display: none;
+            position: relative;
             margin-top: 10px;
             width: 340px;
             background: rgba(10,12,20,0.7);
@@ -131,6 +133,94 @@
             -webkit-backdrop-filter: blur(24px);
             box-shadow: 0 18px 45px rgba(0,0,0,0.28);
         }
+        .event-video-pill {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            z-index: 12;
+            display: none;
+            align-items: center;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 999px;
+            padding: 3px 6px;
+            gap: 2px;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+        }
+        .event-video-pill.dragging { cursor: grabbing; }
+        .event-video-pill-handle {
+            display: inline-block;
+            width: 2px;
+            height: 16px;
+            margin: 0 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        /* Show the control pill (with at least the play button) whenever there's any video. */
+        .event-video-wrap.has-video .event-video-pill { display: inline-flex; }
+        /* Expand button + the divider only make sense with 2+ videos, and never on narrow screens. */
+        .event-video-wrap:not(.has-multi) .event-video-expand-btn,
+        .event-video-wrap:not(.has-multi) .event-video-pill-handle { display: none; }
+        #telemetry.is-narrow .event-video-expand-btn,
+        #telemetry.is-narrow .event-video-pill-handle { display: none !important; }
+        .event-video-ctrl-btn {
+            width: 28px;
+            height: 28px;
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.92);
+            border-radius: 999px;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+        .event-video-ctrl-btn:hover { background: rgba(255,255,255,0.15); }
+        .event-video-ctrl-btn svg { width: 100%; height: 100%; display: block; }
+        .event-video-expand-btn .collapse-icon { display: none; }
+        .event-video-playall-btn .pause-icon { display: none; }
+        .event-video-wrap.is-expanded .event-video-expand-btn .expand-icon { display: none; }
+        .event-video-wrap.is-expanded .event-video-expand-btn .collapse-icon { display: block; }
+        .event-video-wrap.all-playing .event-video-playall-btn .play-icon { display: none; }
+        .event-video-wrap.all-playing .event-video-playall-btn .pause-icon { display: block; }
+        .event-video-wrap.all-playing .event-video-thumb { display: none; }
+        .event-video-wrap.all-playing .event-video-tile iframe { pointer-events: auto; }
+        .event-video-wrap.is-expanded {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            border: none;
+            border-radius: 0;
+            z-index: 9999;
+            background: #000;
+        }
+        .event-video-wrap.is-expanded .event-video-grid {
+            width: 100%;
+            height: 100%;
+        }
+        .event-video-wrap.is-expanded .event-video-tile { aspect-ratio: auto; }
+        .event-video-wrap.is-expanded .event-video-grid[data-count="1"] .event-video-tile { flex: 0 0 100%; height: 100%; }
+        .event-video-wrap.is-expanded .event-video-grid[data-count="2"] .event-video-tile { flex: 0 0 calc(50% - 1px); height: 100%; }
+        .event-video-wrap.is-expanded .event-video-grid[data-count="3"] .event-video-tile {
+            flex: 0 0 calc(50% - 1px); height: calc(50% - 1px);
+        }
+        .event-video-wrap.is-expanded .event-video-grid[data-count="3"] .event-video-tile:nth-child(1) { flex: 0 0 100%; }
+        .event-video-wrap.is-expanded .event-video-grid[data-count="4"] .event-video-tile {
+            flex: 0 0 calc(50% - 1px); height: calc(50% - 1px);
+        }
+        .event-video-wrap.is-expanded .event-video-grid.has-active .event-video-tile {
+            flex: 0 0 calc(33.333% - 2px); height: calc(33.333% - 1px);
+        }
+        .event-video-wrap.is-expanded .event-video-grid.has-active .event-video-tile.active {
+            flex: 0 0 100%; height: calc(66.666% - 1px);
+        }
         #telemetry.has-video .event-video-wrap {
             display: block;
         }
@@ -140,6 +230,62 @@
             aspect-ratio: 16 / 9;
             border: 0;
             background: #000;
+        }
+        .event-video-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            background: #000;
+        }
+        .event-video-tile {
+            position: relative;
+            flex: 0 0 100%;
+            aspect-ratio: 16 / 9;
+            cursor: pointer;
+            background: #000;
+            overflow: hidden;
+        }
+        .event-video-tile iframe {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            pointer-events: none;
+        }
+        /* The promoted/active tile's iframe is fully interactive so YouTube controls work. */
+        .event-video-grid.has-active .event-video-tile.active iframe { pointer-events: auto; }
+        /* Cover non-active tiles with the YouTube thumbnail so the embed's big play button
+           doesn't dominate the small preview. The image is removed on the active tile so
+           the iframe (and its real play controls) become visible. */
+        .event-video-thumb {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #000;
+            pointer-events: none;
+            z-index: 1;
+            display: block;
+        }
+        .event-video-grid.has-active .event-video-tile.active .event-video-thumb { display: none; }
+        .event-video-tile:hover { outline: 1px solid rgba(255,255,255,0.25); outline-offset: -1px; }
+        /* Default layouts when no tile is "promoted" */
+        .event-video-grid[data-count="2"] .event-video-tile { flex: 0 0 calc(50% - 1px); }
+        .event-video-grid[data-count="3"] .event-video-tile { flex: 0 0 calc(50% - 1px); }
+        .event-video-grid[data-count="3"] .event-video-tile:nth-child(1) { flex: 0 0 100%; }
+        .event-video-grid[data-count="4"] .event-video-tile { flex: 0 0 calc(50% - 1px); }
+        /* Promoted layout: the active tile spans full width on top, the rest share a row below */
+        .event-video-grid.has-active .event-video-tile { flex: 0 0 calc(33.333% - 2px); order: 2; }
+        .event-video-grid.has-active .event-video-tile.active {
+            flex: 0 0 100%;
+            order: 1;
+        }
+        .event-video-grid.has-active[data-count="2"] .event-video-tile:not(.active) {
+            flex: 0 0 calc(50% - 1px);
+        }
+        .event-video-grid.has-active[data-count="3"] .event-video-tile:not(.active) {
+            flex: 0 0 calc(50% - 1px);
         }
 
 
@@ -732,6 +878,19 @@
             display: inline-flex;
         }
 
+        .met-counter.with-launch-time {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 14px;
+        }
+        #met-counter-launch-time {
+            color: rgba(255, 255, 255, 0.5);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+
         .countdown-overlay {
             position: absolute;
             top: 50%;
@@ -1088,14 +1247,28 @@
             </div>
         </div>
         <div class="event-video-wrap" id="event-video-wrap">
-            <iframe
-                id="event-video-frame"
-                class="event-video-frame"
-                src="about:blank"
-                title="Event video"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerpolicy="strict-origin-when-cross-origin"
-                allowfullscreen></iframe>
+            <div class="event-video-pill" id="event-video-pill" role="group" aria-label="Video controls">
+                <button class="event-video-ctrl-btn event-video-playall-btn" id="event-video-playall-btn" type="button"
+                        onclick="toggleAllVideos()" aria-label="Play all videos" title="Play all">
+                    <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M6 5h4v14H6zM14 5h4v14h-4z"/>
+                    </svg>
+                </button>
+                <span class="event-video-pill-handle" aria-hidden="true"></span>
+                <button class="event-video-ctrl-btn event-video-expand-btn" id="event-video-expand-btn" type="button"
+                        onclick="toggleVideoExpand()" aria-label="Expand videos" title="Expand videos">
+                    <svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>
+                    </svg>
+                    <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="event-video-grid" id="event-video-grid"></div>
         </div>
     </div>
 
@@ -1481,6 +1654,8 @@
         let currentEventLaunchWindow = null;
         let currentEventCountTimeMs = null;
         let currentEventFlightPath = null;
+        let currentEventLaunchSiteTimezone = '';
+        let launchSiteTimeFormatter = null;
         let countdownAfterRestart = false;
         let telemetrySecondaryDistanceMode = 'moon';
         let ORION_REFERENCE_LAUNCH_TIME = LAUNCH_TIME;
@@ -3512,6 +3687,7 @@
                     localTimeLabel: `${spec.launch_window.local_time_label || ''}`.trim(),
                     windowMinutes: Number(spec.launch_window.window_minutes) || 0
                 } : null,
+                launchSiteTimezone: `${spec.launch_site_timezone || ''}`.trim(),
                 countTimeMs: parseEventDateMs(spec.count_time, null),
                 defaultSecondaryDistance: `${spec.default_secondary_distance || 'moon'}`.trim().toLowerCase(),
                 flightPath: (() => {
@@ -4721,21 +4897,185 @@
 
         function updateEventVideoPanel() {
             const telemetry = document.getElementById('telemetry');
-            const frame = document.getElementById('event-video-frame');
-            const youtubeId = (currentEventVideoYoutubeId || '').trim();
-            const hasVideo = Boolean(youtubeId);
-            telemetry.classList.toggle('has-video', hasVideo);
-            if (hasVideo) {
-                const nextSrc = `https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&playsinline=1&rel=0`;
-                if (frame.dataset.youtubeId !== youtubeId) {
-                    frame.src = nextSrc;
-                    frame.dataset.youtubeId = youtubeId;
-                }
-            } else {
-                frame.src = 'about:blank';
-                frame.dataset.youtubeId = '';
+            const wrap = document.getElementById('event-video-wrap');
+            const grid = document.getElementById('event-video-grid');
+            if (!grid) return;
+            const raw = (currentEventVideoYoutubeId || '').trim();
+            const ids = raw
+                ? raw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 4)
+                : [];
+            telemetry.classList.toggle('has-video', ids.length > 0);
+            if (wrap) {
+                wrap.classList.toggle('has-video', ids.length > 0);
+                wrap.classList.toggle('has-multi', ids.length >= 2);
+                if (ids.length < 2) wrap.classList.remove('is-expanded');
+            }
+            // Only rebuild if the id list actually changed (avoids reloading running iframes).
+            const currentSignature = grid.dataset.idsSignature || '';
+            const nextSignature = ids.join('|');
+            if (currentSignature !== nextSignature) {
+                grid.innerHTML = ids.map((id, idx) => `
+                    <div class="event-video-tile" data-tile-idx="${idx}">
+                        <iframe
+                            src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=0&playsinline=1&rel=0&enablejsapi=1"
+                            title="Event video ${idx + 1}"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            referrerpolicy="strict-origin-when-cross-origin"
+                            allowfullscreen></iframe>
+                        <img class="event-video-thumb" src="https://img.youtube.com/vi/${encodeURIComponent(id)}/hqdefault.jpg" alt="" loading="lazy">
+                    </div>
+                `).join('');
+                grid.dataset.idsSignature = nextSignature;
+                grid.dataset.count = String(ids.length);
+                grid.classList.remove('has-active');
+                if (wrap) wrap.classList.remove('all-playing');
+                // Re-apply the URL hash so links arriving with #vid=expand-play take effect.
+                // We attach a load listener too because postMessage to a YouTube iframe is
+                // only honored once the iframe has finished loading the embed.
+                grid.querySelectorAll('iframe').forEach((frame) => {
+                    frame.addEventListener('load', () => applyVidHashState(), { once: true });
+                });
+                applyVidHashState();
             }
         }
+
+        // Video panel state is driven by the URL hash so links can be shared.
+        //   #vid=expand        — videos fill the screen
+        //   #vid=play          — all videos playing
+        //   #vid=expand-play   — both
+        //   (no vid param)     — default (paused, normal layout)
+        function parseVidHash(value) {
+            const parts = `${value || ''}`.split('-').filter(Boolean);
+            return {
+                expand: parts.includes('expand'),
+                play: parts.includes('play')
+            };
+        }
+        function buildVidHash(state) {
+            const parts = [];
+            if (state.expand) parts.push('expand');
+            if (state.play) parts.push('play');
+            return parts.join('-');
+        }
+        function applyVidHashState() {
+            const wrap = document.getElementById('event-video-wrap');
+            if (!wrap) return;
+            const state = parseVidHash(getHashParam('vid'));
+            const wasExpanded = wrap.classList.contains('is-expanded');
+            wrap.classList.toggle('is-expanded', state.expand);
+            wrap.classList.toggle('all-playing', state.play);
+            // When returning from expanded to normal, snap the pill back to its default top-right slot.
+            if (wasExpanded && !state.expand && typeof window.__resetVideoPillPosition === 'function') {
+                window.__resetVideoPillPosition();
+            }
+            const iframes = wrap.querySelectorAll('iframe');
+            if (iframes.length > 0) {
+                const cmd = state.play ? 'playVideo' : 'pauseVideo';
+                const message = JSON.stringify({ event: 'command', func: cmd, args: '' });
+                iframes.forEach((frame) => {
+                    try { frame.contentWindow?.postMessage(message, '*'); } catch (_) { /* iframe not ready yet */ }
+                });
+            }
+            const btn = document.getElementById('event-video-playall-btn');
+            if (btn) {
+                btn.setAttribute('aria-label', state.play ? 'Pause all videos' : 'Play all videos');
+                btn.title = state.play ? 'Pause all' : 'Play all';
+            }
+        }
+        function updateVidHashState(mutator) {
+            const next = parseVidHash(getHashParam('vid'));
+            mutator(next);
+            const newVid = buildVidHash(next);
+            setHashParam('vid', newVid || null);
+            // setHashParam uses history.replaceState, which does not fire a native hashchange
+            // event — so apply the new state directly here. (External hash changes such as
+            // back/forward or URL-bar edits are handled by the page's window 'hashchange'
+            // listener, which also calls applyVidHashState below.)
+            applyVidHashState();
+        }
+
+        window.toggleVideoExpand = () => {
+            const wrap = document.getElementById('event-video-wrap');
+            if (!wrap || !wrap.classList.contains('has-multi')) return;
+            updateVidHashState((s) => { s.expand = !s.expand; });
+        };
+
+        function initVideoPillDrag() {
+            const pill = document.getElementById('event-video-pill');
+            if (!pill || pill.dataset.dragBound) return;
+            pill.dataset.dragBound = 'true';
+            let dragging = false;
+            let offsetX = 0;
+            let offsetY = 0;
+            let startPointerX = 0;
+            let startPointerY = 0;
+
+            // Allow other code (e.g. the collapse-from-fullscreen path) to snap the pill home.
+            window.__resetVideoPillPosition = () => {
+                offsetX = 0;
+                offsetY = 0;
+                pill.style.transform = '';
+            };
+
+            pill.addEventListener('pointerdown', (event) => {
+                // Don't start a drag if the pointer is on one of the buttons inside the pill;
+                // let the button receive the click normally.
+                if (event.target.closest('button')) return;
+                dragging = true;
+                startPointerX = event.clientX - offsetX;
+                startPointerY = event.clientY - offsetY;
+                pill.classList.add('dragging');
+                try { pill.setPointerCapture(event.pointerId); } catch (_) { /* no-op */ }
+                event.preventDefault();
+            });
+
+            pill.addEventListener('pointermove', (event) => {
+                if (!dragging) return;
+                offsetX = event.clientX - startPointerX;
+                offsetY = event.clientY - startPointerY;
+                pill.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+            });
+
+            const endDrag = (event) => {
+                if (!dragging) return;
+                dragging = false;
+                pill.classList.remove('dragging');
+                try { pill.releasePointerCapture(event.pointerId); } catch (_) { /* no-op */ }
+            };
+            pill.addEventListener('pointerup', endDrag);
+            pill.addEventListener('pointercancel', endDrag);
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initVideoPillDrag);
+        } else {
+            initVideoPillDrag();
+        }
+
+        window.toggleAllVideos = () => {
+            const wrap = document.getElementById('event-video-wrap');
+            if (!wrap) return;
+            const iframes = wrap.querySelectorAll('iframe');
+            if (iframes.length === 0) return;
+            updateVidHashState((s) => { s.play = !s.play; });
+        };
+
+        // Pick up vid changes from external sources (back/forward, URL-bar edits, shared links).
+        window.addEventListener('hashchange', () => applyVidHashState());
+
+        document.addEventListener('click', (event) => {
+            const tile = event.target.closest('.event-video-tile');
+            if (!tile) return;
+            const grid = tile.parentElement;
+            if (!grid || !grid.classList.contains('event-video-grid')) return;
+            const tiles = grid.querySelectorAll('.event-video-tile');
+            if (tiles.length < 2) return;
+            // The active (promoted) tile's iframe is interactive — clicks on it go to YouTube,
+            // not here. If a click does land on the active tile's wrapper, leave it alone.
+            if (tile.classList.contains('active')) return;
+            tiles.forEach((t) => t.classList.remove('active'));
+            tile.classList.add('active');
+            grid.classList.add('has-active');
+        });
 
         function formatMissionTitleText(spec) {
             const lw = spec?.launchWindow;
@@ -4829,6 +5169,30 @@
             currentEventLaunchWindow = spec.launchWindow || null;
             currentEventCountTimeMs = Number.isFinite(spec.countTimeMs) ? spec.countTimeMs : null;
             currentEventFlightPath = spec.flightPath || null;
+            currentEventLaunchSiteTimezone = `${spec.launchSiteTimezone || ''}`.trim();
+            launchSiteTimeFormatter = null;
+            if (currentEventLaunchSiteTimezone) {
+                try {
+                    launchSiteTimeFormatter = new Intl.DateTimeFormat('en-US', {
+                        timeZone: currentEventLaunchSiteTimezone,
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                        timeZoneName: 'short'
+                    });
+                } catch (err) {
+                    console.warn('Invalid launch_site_timezone:', currentEventLaunchSiteTimezone, err);
+                    launchSiteTimeFormatter = null;
+                }
+            }
+            // Ensure the met-counter has the two-span structure so we can show the launch-site clock to the right.
+            const metCounterStructureEl = document.getElementById('met-counter');
+            if (metCounterStructureEl && !document.getElementById('met-counter-elapsed')) {
+                metCounterStructureEl.innerHTML = '<span id="met-counter-elapsed"></span><span id="met-counter-launch-time"></span>';
+            }
+            if (metCounterStructureEl) {
+                metCounterStructureEl.classList.toggle('with-launch-time', Boolean(launchSiteTimeFormatter));
+            }
             countdownAfterRestart = false;
             telemetrySecondaryDistanceMode = spec.defaultSecondaryDistance === 'flight' ? 'flight' : 'moon';
             currentEventShowSolarSystem = spec.showSolarSystem !== false;
@@ -7266,10 +7630,18 @@
             const metH = Math.floor((metAbs % MS_PER_DAY) / 3600000);
             const metM = Math.floor((metAbs % 3600000) / 60000);
             const metS = Math.floor((metAbs % 60000) / 1000);
-            setTextIfChanged(
-                metCounterEl,
-                `T${metSign}${String(metD).padStart(2,'0')}:${String(metH).padStart(2,'0')}:${String(metM).padStart(2,'0')}:${String(metS).padStart(2,'0')}`
-            );
+            const metElapsedText = `T${metSign}${String(metD).padStart(2,'0')}:${String(metH).padStart(2,'0')}:${String(metM).padStart(2,'0')}:${String(metS).padStart(2,'0')}`;
+            const metElapsedEl = document.getElementById('met-counter-elapsed') || metCounterEl;
+            setTextIfChanged(metElapsedEl, metElapsedText);
+            const metLaunchTimeEl = document.getElementById('met-counter-launch-time');
+            if (metLaunchTimeEl) {
+                if (launchSiteTimeFormatter && timelineReady) {
+                    // Use simulation time so the displayed local time advances with the timeline.
+                    setTextIfChanged(metLaunchTimeEl, launchSiteTimeFormatter.format(new Date(solarDateMs)));
+                } else if (metLaunchTimeEl.textContent) {
+                    setTextIfChanged(metLaunchTimeEl, '');
+                }
+            }
 
             // Terminal Countdown overlay (visible from count_time through liftoff).
             // Updated every frame (not throttled) so the number ticks down as soon as Play is hit.

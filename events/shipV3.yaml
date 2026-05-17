@@ -8,14 +8,15 @@ mission_name: STARSHIP IFT-12
 browser_title: Starship V3 IFT-12 — Flight Tracker
 overview_label: Mission Overview
 overview_view: earth
-video_youtube_id: itxmNtK8D2k
+video_youtube_id: itxmNtK8D2k,_mtLT563qdg,MITcYk0GOBo,TyXUaqscyiU
 launch_time: 2026-05-19T22:30:00Z
-count_time: 2026-05-19T22:29:50Z
+count_time: 2026-05-19T22:29:48Z
 start_date: 2026-05-19T22:30:00Z
 end_date: 2026-05-19T23:35:00Z
 launch_window:
   local_time_label: "5:30 PM CDT"
   window_minutes: 90
+launch_site_timezone: "America/Chicago"
 default_secondary_distance: flight
 solar_start_date: 2026-05-19T22:30:00Z
 initial_view: earth
