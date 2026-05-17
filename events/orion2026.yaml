@@ -25,7 +25,7 @@ object:
 object_name: orion
 follow_label: Follow Orion
 mission_name: ARTEMIS II
-browser_title: Artemis II — Live Mission Tracker
+browser_title: Artemis II — Mission Tracker
 overview_label: Mission Overview
 overview_view: earth-moon
 video_youtube_id: zctTKdQcmVA,iQMyg9sWy0Y,Ke6XX8FHOHM
