@@ -954,18 +954,6 @@
             display: inline-flex;
         }
 
-        .met-counter.with-launch-time {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            gap: 14px;
-        }
-        #met-counter-launch-time {
-            color: rgba(255, 255, 255, 0.5);
-            font-variant-numeric: tabular-nums;
-            letter-spacing: 1px;
-            white-space: nowrap;
-        }
 
         .countdown-overlay {
             position: absolute;
@@ -5334,13 +5322,9 @@
                     launchSiteTimeFormatter = null;
                 }
             }
-            // Ensure the met-counter has the two-span structure so we can show the launch-site clock to the right.
-            const metCounterStructureEl = document.getElementById('met-counter');
-            if (metCounterStructureEl && !document.getElementById('met-counter-elapsed')) {
-                metCounterStructureEl.innerHTML = '<span id="met-counter-elapsed"></span><span id="met-counter-launch-time"></span>';
-            }
-            if (metCounterStructureEl) {
-                metCounterStructureEl.classList.toggle('with-launch-time', Boolean(launchSiteTimeFormatter));
+            const metCounterRowEl = document.getElementById('met-counter-row');
+            if (metCounterRowEl) {
+                metCounterRowEl.classList.toggle('with-launch-time', Boolean(launchSiteTimeFormatter));
             }
             countdownAfterRestart = false;
             telemetrySecondaryDistanceMode = spec.defaultSecondaryDistance === 'flight' ? 'flight' : 'moon';
@@ -7780,8 +7764,7 @@
             const metM = Math.floor((metAbs % 3600000) / 60000);
             const metS = Math.floor((metAbs % 60000) / 1000);
             const metElapsedText = `T${metSign}${String(metD).padStart(2,'0')}:${String(metH).padStart(2,'0')}:${String(metM).padStart(2,'0')}:${String(metS).padStart(2,'0')}`;
-            const metElapsedEl = document.getElementById('met-counter-elapsed') || metCounterEl;
-            setTextIfChanged(metElapsedEl, metElapsedText);
+            setTextIfChanged(metCounterEl, metElapsedText);
             const metLaunchTimeEl = document.getElementById('met-counter-launch-time');
             if (metLaunchTimeEl) {
                 if (launchSiteTimeFormatter && timelineReady) {
